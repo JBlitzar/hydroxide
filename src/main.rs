@@ -22,8 +22,11 @@ fn main() {
         Camera::new(400, 300, 90.0_f64.to_radians(), 70.0_f64.to_radians(), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0)),
         HittableList { objs: vec![Box::new(ball), Box::new(floor)] }
     );
+    let start = std::time::Instant::now();
     world.render();
     world.save_image("output.png");
+    let duration = start.elapsed();
+    println!("Render time: {:?}", duration);
 
 
 }
