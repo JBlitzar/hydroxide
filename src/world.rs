@@ -1,5 +1,6 @@
 use crate::vec3::Vec3;
 use crate::vec3::Ray;
+use fastrand;
 
 pub(crate) struct Camera {
     width_px: usize,
@@ -42,9 +43,9 @@ impl Material for Lambertian {
     fn scatter(&self, ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
 
         let mut random_in_unit_hemisphere = Vec3::new(
-            rand::random::<f64>() * 2.0 - 1.0,
-            rand::random::<f64>() * 2.0 - 1.0,
-            rand::random::<f64>() * 2.0 - 1.0,
+            fastrand::f64() * 2.0 - 1.0,
+            fastrand::f64() * 2.0 - 1.0,
+            fastrand::f64() * 2.0 - 1.0,
         )
         .normalize();
 
@@ -119,7 +120,7 @@ impl HittableList {
         let mut closest_hit: Option<HitRecord> = None;
         for obj in &self.objs {
             if let Some(hit) = obj.hit(ray) {
-                if closest_hit.is_none() || (hit.point.sub(&ray.origin)).length() < (closest_hit.as_ref().unwrap().point.sub(&ray.origin)).length() {
+                if closest_hit.is_none() || (hit.point.sub(&ray.origin)).length_squared() < (closest_hit.as_ref().unwrap().point.sub(&ray.origin)).length_squared() {
                     closest_hit = Some(hit);
                 }
             }
