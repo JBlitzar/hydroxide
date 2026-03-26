@@ -2,6 +2,22 @@ use crate::vec3::Vec3;
 use crate::vec3::Ray;
 use fastrand;
 
+fn random_in_unit_sphere() -> Vec3 {
+    // better way, because it's rejection sampling
+    let mut p = Vec3::new(0.0, 0.0, 0.0);
+    loop {
+        p = Vec3::new(
+            fastrand::f64() * 2.0 - 1.0,
+            fastrand::f64() * 2.0 - 1.0,
+            fastrand::f64() * 2.0 - 1.0,
+        );
+        if p.length_squared() < 1.0 {
+            break;
+        }
+    }
+    p
+}
+
 pub(crate) struct Camera {
     width_px: usize,
     height_px: usize,
@@ -13,7 +29,11 @@ pub(crate) struct Camera {
     half_tan_fov_y: f64,
 }
 impl Camera {
-    pub fn new(width_px: usize, height_px: usize, x_fov: f64, y_fov: f64, position: Vec3, euler_angles: Vec3) -> Self {
+    pub fn new(width_px: usize, height_px: usize, x_fov: f64, position: Vec3, euler_angles: Vec3) -> Self {
+        
+        let half_tan_fov_x = (x_fov / 2.0).tan();
+        let half_tan_fov_y = half_tan_fov_x * (height_px as f64 / width_px as f64);
+        let y_fov = 2.0 * half_tan_fov_y.atan();
         Camera {
             width_px,
             height_px,
@@ -21,8 +41,8 @@ impl Camera {
             y_fov,
             position,
             euler_angles,
-            half_tan_fov_x: (x_fov / 2.0).tan(),
-            half_tan_fov_y: (y_fov / 2.0).tan()
+            half_tan_fov_x: half_tan_fov_x,
+            half_tan_fov_y: half_tan_fov_y
         }
     }
 
@@ -46,28 +66,49 @@ impl Material for Lambertian {
 
     fn scatter(&self, ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
 
-        let mut random_in_unit_hemisphere = Vec3::new(
-            fastrand::f64() * 2.0 - 1.0,
-            fastrand::f64() * 2.0 - 1.0,
-            fastrand::f64() * 2.0 - 1.0,
-        )
-        .normalize();
-
+        let mut random_in_unit_hemisphere = random_in_unit_sphere();
         if random_in_unit_hemisphere.dot(&hit_record.normal) < 0.0 {
             random_in_unit_hemisphere = random_in_unit_hemisphere.scalar_mul(-1.0);
         }
         
         let target = hit_record.point.add(&hit_record.normal).add(&random_in_unit_hemisphere);
         
-        Some((Ray::new(hit_record.point, target.sub(&hit_record.point).normalize()), self.albedo))
+        Some((Ray::new(hit_record.point, target.sub(&hit_record.point)), self.albedo))
     }
 
 }
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct Metal {
+    pub albedo: Vec3,
+    pub fuzz: f64,
+
+}
+impl Material for Metal {
+    fn scatter(&self, ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
+        let reflected_dir = ray_in.direction.sub(&hit_record.normal.scalar_mul(2.0 * ray_in.direction.dot(&hit_record.normal)));
+        let fuzz = random_in_unit_sphere().scalar_mul(self.fuzz);
+
+        Some((Ray::new(hit_record.point, reflected_dir.add(&fuzz)), self.albedo))
+    }
+}
+
+// pub struct Glass {
+//     pub albedo: Vec3,
+//     pub refractive_index: f64,
+// }
+// impl Material for Glass {
+//     fn scatter(&self, ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
+        
+
+//     }
+// }
 
 struct HitRecord<'a> {
     point: Vec3,
     normal: Vec3,
     material: &'a dyn Material,
+    t: f64,
 }
 
 
@@ -100,7 +141,7 @@ impl Hittable for Sphere {
             }
             let point = ray.origin.add(&ray.direction.scalar_mul(t));
             let normal = (point.sub(&self.center)).normalize();
-            Some(HitRecord { point, normal, material: self.material.as_ref() })
+            Some(HitRecord { point, normal, material: self.material.as_ref(), t })
         }
     }
 
@@ -124,7 +165,7 @@ impl HittableList {
         let mut closest_hit: Option<HitRecord> = None;
         for obj in &self.objs {
             if let Some(hit) = obj.hit(ray) {
-                if closest_hit.is_none() || (hit.point.sub(&ray.origin)).length_squared() < (closest_hit.as_ref().unwrap().point.sub(&ray.origin)).length_squared() {
+                if closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t {
                     closest_hit = Some(hit);
                 }
             }
