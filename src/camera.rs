@@ -3,8 +3,6 @@ use crate::vec3::{Ray, Vec3};
 pub struct Camera {
     pub(crate) width_px: usize,
     pub(crate) height_px: usize,
-    x_fov: f64,
-    y_fov: f64,
     position: Vec3,
     euler_angles: Vec3,
     half_tan_fov_x: f64,
@@ -24,8 +22,6 @@ impl Camera {
         Camera {
             width_px,
             height_px,
-            x_fov,
-            y_fov,
             position,
             euler_angles,
             half_tan_fov_x: half_tan_fov_x,
