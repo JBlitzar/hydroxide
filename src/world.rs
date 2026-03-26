@@ -1,6 +1,7 @@
 use crate::vec3::Vec3;
 use crate::vec3::Ray;
 use fastrand;
+use stl_io;
 
 fn random_in_unit_sphere() -> Vec3 {
     // better way, because it's rejection sampling
@@ -196,50 +197,158 @@ pub struct Triangle {
     pub(crate) v0: Vec3,
     pub(crate) v1: Vec3,
     pub(crate) v2: Vec3,
-    pub(crate) material: Box<dyn Material>,
+    pub normal: Vec3,
+    pub e1: Vec3,
+    pub e2: Vec3,
 }
-impl Hittable for Triangle {
-    fn hit(&self, ray: &Ray) -> Option<HitRecord> {
+impl Triangle {
+    pub fn new(v0: Vec3, v1: Vec3, v2: Vec3) -> Self {
+        let e1 = v1.sub(&v0);
+        let e2 = v2.sub(&v0);
+        let normal = e1.cross(&e2).normalize();
+        Triangle { v0, v1, v2, normal, e1, e2 }
+    }
+
+    
+    fn hit<'a>(&self, ray: &Ray, material: &'a dyn Material) -> Option<HitRecord<'a>> {
         // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
-        let v0v1 = self.v1.sub(&self.v0);
-        let v0v2 = self.v2.sub(&self.v0);
-        let N = v0v1.cross(&v0v2);
-        let NdotRayDirection = N.dot(&ray.direction);
+        let NdotRayDirection = self.normal.dot(&ray.direction);
         if NdotRayDirection.abs() < 1e-6 {
             return None;
         }
-        let d = N.dot(&self.v0);
-        let t = (N.dot(&ray.origin) + d) / NdotRayDirection;
+        let d = self.normal.dot(&self.v0);
+        let t = (self.normal.dot(&ray.origin) + d) / NdotRayDirection;
         if t < 0.001 {
             return None;
         }
         let P = ray.origin.add(&ray.direction.scalar_mul(t));
         let mut Ne: Vec3;
         let v0p = P.sub(&self.v0);
-        Ne = v0v1.cross(&v0p);
-        if N.dot(&Ne) < 0.0 {
+        Ne = self.e1.cross(&v0p);
+        if self.normal.dot(&Ne) < 0.0 {
             return None;
         }
 
         let v2v1 = self.v2.sub(&self.v1);
         let v1p = P.sub(&self.v1);
-        Ne = v2v1.cross(&v1p);
-        if N.dot(&Ne) < 0.0 {
+        Ne = self.e2.cross(&v1p);
+        if self.normal.dot(&Ne) < 0.0 {
             return None;
         }
 
         let v2v0 = self.v0.sub(&self.v2);
         let v2p = P.sub(&self.v2);
-        Ne = v2v0.cross(&v2p);
-        if N.dot(&Ne) < 0.0 {
+        Ne = self.e1.cross(&v2p);
+        if self.normal.dot(&Ne) < 0.0 {
             return None;
         }
         
-        Some(HitRecord { point: P, normal: N.normalize(), material: self.material.as_ref(), t })
+        Some(HitRecord { point: P, normal: self.normal, material, t })
     }
 }
 
+// haha todo lol
 
+// pub struct AABB {
+//     min: Vec3,
+//     max: Vec3,
+// }
+// impl AABB {
+//     pub fn surrounding_box(box0: &AABB, box1: &AABB) -> AABB {
+//         let small = Vec3::new(
+//             box0.min.x.min(box1.min.x),
+//             box0.min.y.min(box1.min.y),
+//             box0.min.z.min(box1.min.z),
+//         );
+//         let big = Vec3::new(
+//             box0.max.x.max(box1.max.x),
+//             box0.max.y.max(box1.max.y),
+//             box0.max.z.max(box1.max.z),
+//         );
+//         AABB { min: small, max: big }
+//     }
+// }
+
+// pub BVHNode {
+//     left: Box<dyn Hittable>,
+//     right: Box<dyn Hittable>,
+//     bbox: AABB,
+// }
+// impl BVHNode {
+//     pub fn build(objects: &mut [Box<dyn Hittable>], start: usize, end: usize) -> Self {
+//         node.bbox = AABB::surrounding_box(&left.box, &right.box);
+
+//         let n = end - start;
+//         if n <= 4 {
+//         }
+
+
+        
+//     }
+// }
+
+pub struct Mesh {
+    pub(crate) triangles: Vec<Triangle>,
+    pub(crate) material: Box<dyn Material>,
+}
+impl Mesh {
+    pub fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {
+        Mesh { triangles, material }
+    }
+    pub fn from_stl(path: &str, material: Box<dyn Material>) -> Self {
+        let mut file = std::fs::File::open(path).expect("failed to open STL file");
+        let stl = stl_io::read_stl(&mut file).expect("failed to read STL file");
+        let triangles = stl.faces.into_iter().map(|face| {
+            let v0 = Vec3::new(stl.vertices[face.vertices[0] as usize][0] as f64, stl.vertices[face.vertices[0] as usize][1] as f64, stl.vertices[face.vertices[0] as usize][2] as f64);
+            let v1 = Vec3::new(stl.vertices[face.vertices[1] as usize][0] as f64, stl.vertices[face.vertices[1] as usize][1] as f64, stl.vertices[face.vertices[1] as usize][2] as f64);
+            let v2 = Vec3::new(stl.vertices[face.vertices[2] as usize][0] as f64, stl.vertices[face.vertices[2] as usize][1] as f64, stl.vertices[face.vertices[2] as usize][2] as f64);
+            Triangle::new(v0, v1, v2)
+        }).collect();
+        Mesh { triangles, material }
+    }
+    pub fn build_cube(center: Vec3, size: f64, material: Box<dyn Material>) -> Self {
+        let half = size / 2.0;
+        let v0 = center.add(&Vec3::new(-half, -half, -half));
+        let v1 = center.add(&Vec3::new(half, -half, -half));
+        let v2 = center.add(&Vec3::new(half, half, -half));
+        let v3 = center.add(&Vec3::new(-half, half, -half));
+        let v4 = center.add(&Vec3::new(-half, -half, half));
+        let v5 = center.add(&Vec3::new(half, -half, half));
+        let v6 = center.add(&Vec3::new(half, half, half));
+        let v7 = center.add(&Vec3::new(-half, half, half));
+
+        let triangles = vec![
+            Triangle::new(v0, v1, v2),
+            Triangle::new(v0, v2, v3),
+            Triangle::new(v1, v5, v6),
+            Triangle::new(v1, v6, v2),
+            Triangle::new(v5, v4, v7),
+            Triangle::new(v5, v7, v6),
+            Triangle::new(v4, v0, v3),
+            Triangle::new(v4, v3, v7),
+            Triangle::new(v3, v2, v6),
+            Triangle::new(v3, v6, v7),
+            Triangle::new(v4, v5, v1),
+            Triangle::new(v4, v1, v0),
+        ];
+
+        Mesh { triangles, material }
+    }
+}
+impl Hittable for Mesh {
+    fn hit(&self, ray: &Ray) -> Option<HitRecord> {
+        let mut closest_hit: Option<HitRecord> = None;
+        for tri in &self.triangles {
+            if let Some(hit) = tri.hit(ray, self.material.as_ref()) {
+                if closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t {
+                    closest_hit = Some(hit);
+                }
+            }
+        }
+        closest_hit
+
+    }
+}
 pub struct Plane {
     pub(crate) point: Vec3,
     pub(crate) normal: Vec3,

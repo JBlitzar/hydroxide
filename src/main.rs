@@ -9,7 +9,7 @@ use crate::world::Metal;
 use crate::world::Sphere;
 use crate::world::Dielectric;
 use crate::world::HittableList;
-use crate::world::Triangle;
+use crate::world::Mesh;
 
 fn main() {
     let red = Lambertian { albedo: Vec3::new(1.0, 0.0, 0.0) };
@@ -20,16 +20,12 @@ fn main() {
 
     let shiny = Metal { albedo: Vec3::new(1.0, 1.0, 1.0), fuzz: 0.0};
     let ball = Sphere{center: Vec3::new(0.0, 0.0, -5.0), radius: 1.0, material: Box::new(shiny.clone())};
-    let ball2 = Sphere{center: Vec3::new(1.0, -0.5, -3.5), radius: 0.5, material: Box::new(blue)};
+    let ball2 = Sphere{center: Vec3::new(1.0, -0.5, -3.5), radius: 0.5, material: Box::new(blue.clone())};
     let ball3 = Sphere{center: Vec3::new(-1.0, -0.5, -3.5), radius: 0.5, material: Box::new(red)};
     let ball4 = Sphere{center: Vec3::new(0.2, -0.5, -3.7), radius: 0.25, material: Box::new(shiny.clone())};
     let ball5 = Sphere{center: Vec3::new(0.2, -0.5, -2.6), radius: 0.2, material: Box::new(glass)};
-    let tri1 = Triangle {
-        v0: Vec3::new(-0.1, -0.2, -4.0),
-        v1: Vec3::new(0.25, -0.2, -4.0),
-        v2: Vec3::new(0.0, 0.2, -4.0),
-        material: Box::new(bluish),
-    };
+    let cube1 = Mesh::build_cube(Vec3::new(-0.5, -0.5, -3.0), 0.1, Box::new(bluish.clone()));
+       
     let floor = Sphere {
         center: Vec3::new(0.0, -1001.0, -5.0),
         radius: 1000.0,
@@ -39,7 +35,7 @@ fn main() {
 
     let mut world = World::new(
         Camera::new(480, 320, 90.0_f64.to_radians(), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0)),
-        HittableList { objs: vec![Box::new(ball), Box::new(floor), Box::new(ball2), Box::new(ball3), Box::new(ball4), Box::new(ball5), Box::new(tri1)] }
+        HittableList { objs: vec![Box::new(ball), Box::new(floor), Box::new(ball2), Box::new(ball3), Box::new(ball4), Box::new(ball5), Box::new(cube1)] }
     );
     let start = std::time::Instant::now();
     world.render();
