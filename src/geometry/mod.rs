@@ -7,7 +7,7 @@ pub mod plane;
 pub mod sphere;
 
 pub(crate) trait Hittable {
-    fn hit(&self, ray: &Ray) -> Option<HitRecord>;
+    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>>;
 }
 
 // haha todo lol
@@ -60,7 +60,7 @@ impl HittableList {
         self.objs.push(obj);
     }
 
-    pub fn hit(&self, ray: &Ray) -> Option<HitRecord> {
+    pub fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
         // TODO some fancy binary search tree by bounding boxes or something (BVH)
 
         let mut closest_hit: Option<HitRecord> = None;

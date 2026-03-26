@@ -1,5 +1,11 @@
 use crate::vec3::{Ray, Vec3};
 
+pub enum MaterialType {
+    Lambertian(Lambertian),
+    Metal(Metal),
+    Dielectric(Dielectric),
+}
+
 pub struct HitRecord<'a> {
     pub(crate) point: Vec3,
     pub(crate) normal: Vec3,

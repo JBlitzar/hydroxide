@@ -1,6 +1,12 @@
+use std::mem;
+
 use crate::camera::Camera;
 use crate::geometry::HittableList;
+use crate::material::Dielectric;
+use crate::material::Lambertian;
 use crate::material::Material;
+use crate::material::MaterialType;
+use crate::material::Metal;
 use crate::vec3::Ray;
 use crate::vec3::Vec3;
 use fastrand;
@@ -25,6 +31,59 @@ impl World {
             depth: 5,
             samples: 20,
         }
+    }
+    pub fn new_random_spheres(camera:Camera,num_spheres:usize) -> Self {
+        let mut objects = HittableList::new();
+        for _ in 0..num_spheres {
+            let radius = fastrand::f64() * 0.5 + 0.1;
+            let center = Vec3::new(
+                fastrand::f64() * 20.0 - 10.0,
+                -1.0+radius,
+                fastrand::f64() * -20.0 - 5.0,
+            );
+            
+            let rand_type = fastrand::u8(0..3  as u8);
+            let mat: Box<dyn Material>;
+            match rand_type {
+                0 => {
+                    mat = Box::new(Lambertian {
+                        albedo: Vec3::new(fastrand::f64(), fastrand::f64(), fastrand::f64()),
+                    });
+                    
+                }
+                1 => {
+                    mat = Box::new(Metal {
+                        albedo: Vec3::new(fastrand::f64(), fastrand::f64(), fastrand::f64()),
+                        fuzz: fastrand::f64() * 0.5,
+                    });
+                }
+                2 => {
+                    mat = Box::new(Dielectric {
+                        albedo: Vec3::new(1.0, 1.0, 1.0),
+                        refractive_index: fastrand::f64() * 2.0 + 1.0,
+                    });
+                }
+                _ => unreachable!(),
+            }
+            objects.add(
+                Box::new(crate::geometry::sphere::Sphere {
+                center: center,
+                        radius: radius,
+                        material: mat,
+                    }));
+
+        }
+
+        let ground_material = Box::new(Lambertian {
+            albedo: Vec3::new(0.5, 0.5, 0.5),
+        });
+        objects.add(Box::new(crate::geometry::sphere::Sphere {
+            center: Vec3::new(0.0, -1001.0, -5.0),
+            radius: 1000.0,
+            material: ground_material,
+        }));
+
+        return World::new(camera, objects);
     }
 
     pub fn render(&mut self) {

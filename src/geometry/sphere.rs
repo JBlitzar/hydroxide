@@ -11,7 +11,7 @@ pub(crate) struct Sphere {
 }
 
 impl Hittable for Sphere {
-    fn hit(&self, ray: &Ray) -> Option<HitRecord> {
+    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/simplifyingtheray-sphereintersectioncode
         let oc = ray.origin.sub(&self.center);
         let a = ray.direction.dot(&ray.direction);

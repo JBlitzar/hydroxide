@@ -145,7 +145,7 @@ impl Mesh {
     }
 }
 impl Hittable for Mesh {
-    fn hit(&self, ray: &Ray) -> Option<HitRecord> {
+    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
         let mut closest_hit: Option<HitRecord> = None;
         for tri in &self.triangles {
             if let Some(hit) = tri.hit(ray, self.material.as_ref()) {

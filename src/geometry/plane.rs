@@ -10,7 +10,7 @@ pub struct Plane {
     pub(crate) material: Box<dyn Material>,
 }
 impl Hittable for Plane {
-    fn hit(&self, ray: &Ray) -> Option<HitRecord> {
+    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
         let denom = self.normal.dot(&ray.direction);
         if denom.abs() > 1e-6 {
             let t = (self.point.sub(&ray.origin)).dot(&self.normal) / denom;
