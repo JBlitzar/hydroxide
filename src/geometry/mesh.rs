@@ -1,4 +1,5 @@
 use crate::{
+    bvh::AABB,
     geometry::Hittable,
     material::{HitRecord, Material},
     vec3::{Ray, Vec3},
@@ -147,5 +148,23 @@ impl Hittable for Mesh {
             }
         }
         closest_hit
+    }
+
+    fn bounding_box(&self) -> AABB {
+        let mut min = Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
+        let mut max = Vec3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+
+        for t in &self.triangles {
+            for v in [&t.v0, &t.v1, &t.v2] {
+                min.x = min.x.min(v.x);
+                min.y = min.y.min(v.y);
+                min.z = min.z.min(v.z);
+                max.x = max.x.max(v.x);
+                max.y = max.y.max(v.y);
+                max.z = max.z.max(v.z);
+            }
+        }
+
+        AABB::new(min, max)
     }
 }

@@ -101,6 +101,15 @@ impl World {
         }
     }
 
+    pub fn render_single_threaded(&mut self) {
+        for y in 0..self.camera.height_px {
+            for x in 0..self.camera.width_px {
+                let color = self.cast_rays_and_average(x, y, self.samples);
+                self.write_pixel(x, y, color);
+            }
+        }
+    }
+
     pub fn cast_rays_and_average(&self, x: usize, y: usize, samples: usize) -> [u8; 3] {
         let mut color_accumulator = Vec3::new(0.0, 0.0, 0.0);
         for _ in 0..samples {

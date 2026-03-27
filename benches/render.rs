@@ -41,6 +41,7 @@ fn bench_render_cube(c: &mut Criterion) {
                             albedo: Vec3::new(0.8, 0.3, 0.3),
                         }),
                     ))],
+                    bounding_box: None
                 },
             );
             world.render();

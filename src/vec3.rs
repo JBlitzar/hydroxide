@@ -1,8 +1,24 @@
+use std::ops::Index;
+
+
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct Vec3 {
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) z: f64,
+}
+
+impl Index<usize> for Vec3 {
+    type Output = f64;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            _ => panic!("Index out of bounds"),
+        }
+    }
 }
 
 impl Vec3 {

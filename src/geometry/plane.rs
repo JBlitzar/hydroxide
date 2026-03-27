@@ -1,4 +1,5 @@
 use crate::{
+    bvh::AABB,
     geometry::Hittable,
     material::{HitRecord, Material},
     vec3::{Ray, Vec3},
@@ -25,5 +26,14 @@ impl Hittable for Plane {
             }
         }
         None
+    }
+
+    fn bounding_box(&self) -> AABB {
+        // Infinite plane: return a very large box so BVH/AABB-based code can compile.
+        let big = 1.0e30;
+        AABB::new(
+            Vec3::new(-big, -big, -big),
+            Vec3::new(big, big, big),
+        )
     }
 }

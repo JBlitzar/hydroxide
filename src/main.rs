@@ -3,6 +3,7 @@ mod geometry;
 mod material;
 mod vec3;
 mod world;
+mod bvh;
 
 use crate::camera::Camera;
 use crate::geometry::mesh::Mesh;
@@ -52,10 +53,10 @@ mod tests {
             100,
         );
         let start = std::time::Instant::now();
-        world.render();
+        world.render_single_threaded();
         let duration = start.elapsed();
         println!("Render time: {:?}", duration);
 
-        assert_eq!(world.hash_buf(), 0x6f7df2ec15b9dc87);
+        assert_eq!(world.hash_buf(), 0x6ed57fccf41dabca);
     }
 }

@@ -1,4 +1,5 @@
 use crate::{
+    bvh::AABB,
     geometry::Hittable,
     material::{HitRecord, Material},
     vec3::{Ray, Vec3},
@@ -35,5 +36,10 @@ impl Hittable for Sphere {
                 t,
             })
         }
+    }
+
+    fn bounding_box(&self) -> AABB {
+        let r = Vec3::new(self.radius, self.radius, self.radius);
+        AABB::new(self.center.sub(&r), self.center.add(&r))
     }
 }
