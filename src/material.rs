@@ -29,12 +29,12 @@ fn random_in_unit_sphere() -> Vec3 {
     p
 }
 
-pub(crate) trait Material {
+pub trait Material: Send + Sync {
     fn scatter(&self, ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)>;
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub(crate) struct Lambertian {
+pub struct Lambertian {
     pub albedo: Vec3, // color lol
 }
 impl Material for Lambertian {

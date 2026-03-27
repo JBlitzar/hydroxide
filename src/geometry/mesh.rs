@@ -10,15 +10,12 @@ pub struct Triangle {
     pub(crate) v2: Vec3,
     pub normal: Vec3,
     pub e01: Vec3,
-    pub e12: Vec3,
-    pub e20: Vec3,
+    pub e02: Vec3,
 }
 impl Triangle {
     pub fn new(v0: Vec3, v1: Vec3, v2: Vec3) -> Self {
         let e01 = v1.sub(&v0);
         let e02 = v2.sub(&v0);
-        let e12 = v2.sub(&v1);
-        let e20 = v0.sub(&v2);
         let normal = e01.cross(&e02).normalize();
         Triangle {
             v0,
@@ -26,44 +23,39 @@ impl Triangle {
             v2,
             normal,
             e01,
-            e12,
-            e20,
+            e02,
         }
     }
 
     fn hit<'a>(&self, ray: &Ray, material: &'a dyn Material) -> Option<HitRecord<'a>> {
-        // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
-        let NdotRayDirection = self.normal.dot(&ray.direction);
-        if NdotRayDirection.abs() < 1e-6 {
+        // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html#:~:text=.-,Implementation,-Implementing%20the%20M%C3%B6ller
+        let v0v1 = self.e01;
+        let v0v2 = self.e02;
+        let pvec = ray.direction.cross(&v0v2);
+        let det = v0v1.dot(&pvec);
+        if (det.abs() < 1e-8) {
             return None;
         }
-        let d = self.normal.dot(&self.v0);
-        let t = (d - self.normal.dot(&ray.origin)) / NdotRayDirection;
-        if t < 0.001 {
-            return None;
-        }
-        let P = ray.origin.add(&ray.direction.scalar_mul(t));
-        let mut Ne: Vec3;
-        let v0p = P.sub(&self.v0);
-        Ne = self.e01.cross(&v0p);
-        if self.normal.dot(&Ne) < 0.0 {
+        let inv_det = 1.0 / det;
+
+        let tvec = ray.origin.sub(&self.v0);
+        let u = tvec.dot(&pvec) * inv_det;
+        if u < 0.0 || u > 1.0 {
             return None;
         }
 
-        let v1p = P.sub(&self.v1);
-        Ne = self.e12.cross(&v1p);
-        if self.normal.dot(&Ne) < 0.0 {
+        let qvec = tvec.cross(&v0v1);
+        let v = ray.direction.dot(&qvec) * inv_det;
+        if v < 0.0 || u + v > 1.0 {
             return None;
         }
 
-        let v2p = P.sub(&self.v2);
-        Ne = self.e20.cross(&v2p);
-        if self.normal.dot(&Ne) < 0.0 {
+        let t = v0v2.dot(&qvec) * inv_det;
+        if t < 1e-8 {
             return None;
         }
-
         Some(HitRecord {
-            point: P,
+            point: ray.origin.add(&ray.direction.scalar_mul(t)),
             normal: self.normal,
             material,
             t,

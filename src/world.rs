@@ -10,6 +10,7 @@ use crate::material::Metal;
 use crate::vec3::Ray;
 use crate::vec3::Vec3;
 use fastrand;
+use rayon::prelude::*;
 use stl_io;
 
 pub struct World {
@@ -17,7 +18,7 @@ pub struct World {
     camera: Camera,
     img_buffer: Vec<u8>,
     objects: HittableList,
-    depth: usize,
+    termination_prob: f64,
     samples: usize,
 }
 
@@ -28,28 +29,27 @@ impl World {
             camera,
             img_buffer,
             objects,
-            depth: 5,
+            termination_prob: 0.1,
             samples: 20,
         }
     }
-    pub fn new_random_spheres(camera:Camera,num_spheres:usize) -> Self {
+    pub fn new_random_spheres(camera: Camera, num_spheres: usize) -> Self {
         let mut objects = HittableList::new();
         for _ in 0..num_spheres {
             let radius = fastrand::f64() * 0.5 + 0.1;
             let center = Vec3::new(
                 fastrand::f64() * 20.0 - 10.0,
-                -1.0+radius,
+                -1.0 + radius,
                 fastrand::f64() * -20.0 - 5.0,
             );
-            
-            let rand_type = fastrand::u8(0..3  as u8);
+
+            let rand_type = fastrand::u8(0..3 as u8);
             let mat: Box<dyn Material>;
             match rand_type {
                 0 => {
                     mat = Box::new(Lambertian {
                         albedo: Vec3::new(fastrand::f64(), fastrand::f64(), fastrand::f64()),
                     });
-                    
                 }
                 1 => {
                     mat = Box::new(Metal {
@@ -65,13 +65,11 @@ impl World {
                 }
                 _ => unreachable!(),
             }
-            objects.add(
-                Box::new(crate::geometry::sphere::Sphere {
+            objects.add(Box::new(crate::geometry::sphere::Sphere {
                 center: center,
-                        radius: radius,
-                        material: mat,
-                    }));
-
+                radius: radius,
+                material: mat,
+            }));
         }
 
         let ground_material = Box::new(Lambertian {
@@ -87,11 +85,19 @@ impl World {
     }
 
     pub fn render(&mut self) {
-        for y in 0..self.camera.height_px {
-            for x in 0..self.camera.width_px {
-                let pixel = self.cast_rays_and_average(x, y, self.samples);
-                self.write_pixel(x, y, pixel);
-            }
+        let pixels: Vec<[u8; 3]> = (0..self.camera.height_px * self.camera.width_px)
+            .into_par_iter()
+            .map(|i| {
+                let x = i % self.camera.width_px;
+                let y = i / self.camera.width_px;
+                self.cast_rays_and_average(x, y, self.samples)
+            })
+            .collect();
+
+        for (i, pixel) in pixels.iter().enumerate() {
+            let x = i % self.camera.width_px;
+            let y = i / self.camera.width_px;
+            self.write_pixel(x, y, *pixel);
         }
     }
 
@@ -101,16 +107,16 @@ impl World {
             color_accumulator = color_accumulator.add(&self.cast_ray(x, y));
         }
         [
-            (color_accumulator.x / samples as f64 * 255.0).clamp(0.0, 255.0) as u8,
-            (color_accumulator.y / samples as f64 * 255.0).clamp(0.0, 255.0) as u8,
-            (color_accumulator.z / samples as f64 * 255.0).clamp(0.0, 255.0) as u8,
+            ((color_accumulator.x / samples as f64).sqrt() * 255.0).clamp(0.0, 255.0) as u8,
+            ((color_accumulator.y / samples as f64).sqrt() * 255.0).clamp(0.0, 255.0) as u8,
+            ((color_accumulator.z / samples as f64).sqrt() * 255.0).clamp(0.0, 255.0) as u8,
         ]
     }
 
     pub fn cast_ray(&self, x: usize, y: usize) -> Vec3 {
         let mut current_ray = self.camera.get_ray_direction(x, y);
         let mut current_color = Vec3::new(1.0, 1.0, 1.0);
-        for _ in 0..self.depth {
+        loop {
             if let Some(hit) = self.objects.hit(&current_ray) {
                 if let Some((scattered, attenuation)) = hit.material.scatter(&current_ray, &hit) {
                     current_ray = scattered;
@@ -128,6 +134,9 @@ impl World {
                     .scalar_mul(1.0 - t)
                     .add(&Vec3::new(0.5, 0.7, 1.0).scalar_mul(t));
                 return current_color.mul(&sky);
+            }
+            if fastrand::f64() < self.termination_prob {
+                break;
             }
         }
         Vec3::ZERO
@@ -148,5 +157,12 @@ impl World {
         .expect("invalid image buffer size");
 
         img.save(filename).expect("failed to save PNG image");
+    }
+
+    pub fn hash_buf(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.img_buffer.hash(&mut hasher);
+        hasher.finish()
     }
 }

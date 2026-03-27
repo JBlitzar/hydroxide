@@ -6,7 +6,7 @@ pub mod mesh;
 pub mod plane;
 pub mod sphere;
 
-pub(crate) trait Hittable {
+pub trait Hittable: Send + Sync {
     fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>>;
 }
 
@@ -48,8 +48,8 @@ pub(crate) trait Hittable {
 //     }
 // }
 
-pub(crate) struct HittableList {
-    pub(crate) objs: Vec<Box<dyn Hittable>>,
+pub struct HittableList {
+    pub objs: Vec<Box<dyn Hittable>>,
 }
 impl HittableList {
     pub fn new() -> Self {
