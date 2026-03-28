@@ -42,7 +42,8 @@ impl Camera {
             ((x as f64 + fastrand::f64()) / self.width_px as f64 - 0.5) * self.half_tan_fov_x;
         let y_cmp =
             (0.5 - (y as f64 + fastrand::f64()) / self.height_px as f64) * self.half_tan_fov_y;
-        let dir = self.forward
+        let dir = self
+            .forward
             .add(&self.right.scalar_mul(x_cmp))
             .add(&self.up.scalar_mul(y_cmp))
             .normalize();

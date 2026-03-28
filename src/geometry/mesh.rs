@@ -106,14 +106,12 @@ pub struct MeshBVHNode {
     triangle_index: usize,
 }
 
-
 pub struct MeshBVH {
     nodes: Vec<MeshBVHNode>,
     triangles: Vec<Triangle>,
     material: Box<dyn Material>,
     root: usize,
 }
-
 
 impl MeshBVH {
     fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {

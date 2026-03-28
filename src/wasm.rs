@@ -103,7 +103,12 @@ impl WasmRenderer {
             Vec3::new(cam_x, cam_y, cam_z),
             Vec3::new(target_x, target_y, target_z),
         );
-        let mut world = World::new(camera, self.scene.clone(), Some(samples as usize), Some(termination_prob));
+        let mut world = World::new(
+            camera,
+            self.scene.clone(),
+            Some(samples as usize),
+            Some(termination_prob),
+        );
         world.render();
         world.take_buffer_rgba()
     }

@@ -22,7 +22,12 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(camera: Camera, objects: BVHNode, samples: Option<usize>, termination_prob: Option<f64>) -> Self {
+    pub fn new(
+        camera: Camera,
+        objects: BVHNode,
+        samples: Option<usize>,
+        termination_prob: Option<f64>,
+    ) -> Self {
         let img_buffer = vec![0; camera.width_px * camera.height_px * 3];
         World {
             camera,
@@ -156,7 +161,6 @@ impl World {
         self.img_buffer[index + 1] = color[1];
         self.img_buffer[index + 2] = color[2];
     }
-    
 
     pub fn hash_buf(&self) -> u64 {
         use std::hash::{Hash, Hasher};
