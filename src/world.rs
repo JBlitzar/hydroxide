@@ -1,21 +1,16 @@
 use std::hash::Hash;
-use std::mem;
 use std::sync::Arc;
 
 use crate::bvh::BVHNode;
 use crate::camera::Camera;
 use crate::geometry::Hittable;
-use crate::geometry::HittableList;
 use crate::material::Dielectric;
 use crate::material::Lambertian;
 use crate::material::Material;
-use crate::material::MaterialType;
 use crate::material::Metal;
-use crate::vec3::Ray;
 use crate::vec3::Vec3;
 use fastrand;
 use rayon::prelude::*;
-use stl_io;
 
 pub struct World {
     // one world has one camera

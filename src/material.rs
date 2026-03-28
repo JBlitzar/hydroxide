@@ -38,7 +38,7 @@ pub struct Lambertian {
     pub albedo: Vec3, // color lol
 }
 impl Material for Lambertian {
-    fn scatter(&self, ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
+    fn scatter(&self, _ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
         let mut random_in_unit_hemisphere = random_in_unit_sphere();
         if random_in_unit_hemisphere.dot(&hit_record.normal) < 0.0 {
             random_in_unit_hemisphere = random_in_unit_hemisphere.scalar_mul(-1.0);
@@ -136,7 +136,7 @@ pub struct Checkerboard {
 }
 
 impl Material for Checkerboard {
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> Option<(Ray, Vec3)> {
+    fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> Option<(Ray, Vec3)> {
         let x = (hit.point.x * self.scale).floor() as i32;
         let z = (hit.point.z * self.scale).floor() as i32;
         let color = if (x + z) % 2 == 0 {

@@ -6,7 +6,7 @@ pub mod plane;
 pub mod sphere;
 
 pub trait Hittable: Send + Sync {
-    fn hit(&self, ray: &Ray, t_max: f64) -> Option<HitRecord>;
+    fn hit(&self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>>;
 
     fn bounding_box(&self) -> AABB;
 }

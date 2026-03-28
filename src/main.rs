@@ -18,7 +18,6 @@ use crate::camera::Camera;
 use crate::geometry::mesh::MeshBVH;
 use crate::material::Lambertian;
 use crate::vec3::Vec3;
-use crate::vec3::toRadians;
 use crate::world::World;
 
 fn main() {

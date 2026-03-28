@@ -18,7 +18,7 @@ impl Camera {
     ) -> Self {
         let half_tan_fov_x = (x_fov / 2.0).tan();
         let half_tan_fov_y = half_tan_fov_x * (height_px as f64 / width_px as f64);
-        let y_fov = 2.0 * half_tan_fov_y.atan();
+        let _y_fov = 2.0 * half_tan_fov_y.atan();
         Camera {
             width_px,
             height_px,
