@@ -6,12 +6,12 @@
 
 [oxide-460.pages.dev](https://oxide-460.pages.dev/)
 
-A CPU path tracer written in blazingly fast memory safe rust. Compiles to WASM.
+A physically accurate CPU path tracer written in Rust. Compiles to WASM.
 
 Features include:
 
 - Path tracing with global illumination
-- BVH acceleration (O(log n) intersection)
+- Two-level BVH acceleration (O(log n) intersection)
 - Glass, mirror, diffuse materials
 - Mesh loading (STL)
 - Multithreaded via Rayon
