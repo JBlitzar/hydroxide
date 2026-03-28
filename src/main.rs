@@ -9,14 +9,14 @@ use std::sync::Arc;
 
 use crate::bvh::BVHNode;
 use crate::camera::Camera;
-use crate::geometry::mesh::Mesh;
+use crate::geometry::mesh::MeshBVH;
 use crate::material::Lambertian;
 use crate::vec3::Vec3;
 use crate::world::World;
 
 fn main() {
     fastrand::seed(42);
-    let mut objects: Vec<Arc<dyn geometry::Hittable>> = vec![Arc::new(Mesh::build_cube(
+    let mut objects: Vec<Arc<dyn geometry::Hittable>> = vec![Arc::new(MeshBVH::build_cube(
         Vec3::new(0.0, 0.0, -5.0),
         2.0,
         Box::new(Lambertian {

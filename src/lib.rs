@@ -6,7 +6,7 @@ pub mod vec3;
 pub mod world;
 
 use crate::camera::Camera;
-use crate::geometry::mesh::Mesh;
+use crate::geometry::mesh::MeshBVH;
 use crate::geometry::sphere::Sphere;
 use crate::material::Dielectric;
 use crate::material::Lambertian;

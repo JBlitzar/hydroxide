@@ -4,7 +4,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use oxide::bvh::BVHNode;
 use oxide::camera::Camera;
 use oxide::geometry::Hittable;
-use oxide::geometry::mesh::Mesh;
+use oxide::geometry::mesh::MeshBVH;
 use oxide::material::Lambertian;
 use oxide::vec3::Vec3;
 use oxide::world::World;
@@ -30,7 +30,7 @@ fn bench_render(c: &mut Criterion) {
 fn bench_render_cube(c: &mut Criterion) {
     c.bench_function("render cube", |b| {
         b.iter(|| {
-            let mut objects_vec: Vec<Arc<dyn Hittable>> = vec![Arc::new(Mesh::build_cube(
+            let mut objects_vec: Vec<Arc<dyn Hittable>> = vec![Arc::new(MeshBVH::build_cube(
                 Vec3::new(0.0, 0.0, -5.0),
                 1.0,
                 Box::new(Lambertian {

@@ -70,16 +70,32 @@ impl Triangle {
     }
 }
 
-pub struct Mesh {
-    pub(crate) triangles: Vec<Triangle>,
-    pub(crate) material: Box<dyn Material>,
+
+pub struct MeshBVHNode {
+    bbox: AABB,
+    left: usize,
+    right: usize,
+    is_leaf: bool,
+    triangle_index: usize,
 }
-impl Mesh {
-    pub fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {
-        Mesh {
+
+pub struct MeshBVH {
+    nodes: Vec<MeshBVHNode>,
+    triangles: Vec<Triangle>,
+    material: Box<dyn Material>,
+    root: usize,
+}
+
+impl MeshBVH {
+    fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {
+        let mut bvh = MeshBVH {
+            nodes: Vec::new(),
             triangles,
             material,
-        }
+            root: 0,
+        };
+        bvh.root = bvh.build_bvh(0, bvh.triangles.len());
+        bvh
     }
     pub fn from_stl(path: &str, material: Box<dyn Material>) -> Self {
         let mut file = std::fs::File::open(path).expect("failed to open STL file");
@@ -106,10 +122,7 @@ impl Mesh {
                 Triangle::new(v0, v1, v2)
             })
             .collect();
-        Mesh {
-            triangles,
-            material,
-        }
+        MeshBVH::new(triangles, material)
     }
     pub fn build_cube(center: Vec3, size: f64, material: Box<dyn Material>) -> Self {
         let half = size / 2.0;
@@ -137,40 +150,97 @@ impl Mesh {
             Triangle::new(v4, v1, v0),
         ];
 
-        Mesh {
-            triangles,
-            material,
-        }
+        MeshBVH::new(triangles, material)
     }
-}
-impl Hittable for Mesh {
-    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
-        let mut closest_hit: Option<HitRecord> = None;
-        for tri in &self.triangles {
-            if let Some(hit) = tri.hit(ray, self.material.as_ref()) {
-                if closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t {
-                    closest_hit = Some(hit);
-                }
+
+    fn compute_bbox(&self, start: usize, end: usize) -> AABB {
+        let mut small = Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
+        let mut big = Vec3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+
+        for i in start..end {
+            let tri = &self.triangles[i];
+            for v in [&tri.v0, &tri.v1, &tri.v2] {
+                small.x = small.x.min(v.x);
+                small.y = small.y.min(v.y);
+                small.z = small.z.min(v.z);
+                big.x = big.x.max(v.x);
+                big.y = big.y.max(v.y);
+                big.z = big.z.max(v.z);
             }
         }
-        closest_hit
+        AABB::new(small, big)
+    }
+
+
+    fn build_bvh(&mut self, start: usize, end: usize) -> usize {
+        let node_index = self.nodes.len();
+        let bbox = self.compute_bbox(start, end);
+        let axis = bbox.widest_axis();
+        self.triangles[start..end].sort_by(|a, b| {
+            let ca = (a.v0[axis] + a.v1[axis] + a.v2[axis]) / 3.0;
+            let cb = (b.v0[axis] + b.v1[axis] + b.v2[axis]) / 3.0;
+            ca.partial_cmp(&cb).unwrap()
+        });
+        
+        self.nodes.push(MeshBVHNode {
+            bbox,
+            left: 0,
+            right: 0,
+            is_leaf: false,
+            triangle_index: 0,
+        });
+
+        if end - start == 1 {
+            self.nodes[node_index].is_leaf = true;
+            self.nodes[node_index].triangle_index = start;
+            return node_index;
+        }
+
+        let mid = (start + end) / 2;
+        self.nodes[node_index].left = self.build_bvh(start, mid);
+        self.nodes[node_index].right = self.build_bvh(mid, end);
+        node_index
+    }
+
+    fn hit(&self, ray: &Ray) -> Option<HitRecord> {
+        self.hit_node(ray, self.root)
+    }
+
+    fn hit_node(&self, ray: &Ray, idx: usize) -> Option<HitRecord> {
+        let node = &self.nodes[idx];
+        if !node.bbox.hit(ray) { return None; }
+        
+        if node.is_leaf {
+            // only here does material appear
+            return self.triangles[node.triangle_index].hit(ray, self.material.as_ref());
+        }
+        
+        let left = self.hit_node(ray, node.left);
+        let right = self.hit_node(ray, node.right);
+
+
+        match (left, right) {
+            (Some(l), Some(r)) => if l.t < r.t { Some(l) } else { Some(r) },
+            (Some(l), None) => Some(l),
+            (None, Some(r)) => Some(r),
+            (None, None) => None,
+        }
+    }
+
+
+
+}
+
+impl Hittable for MeshBVH {
+    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
+        self.hit(ray)
     }
 
     fn bounding_box(&self) -> AABB {
-        let mut min = Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
-        let mut max = Vec3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
-
-        for t in &self.triangles {
-            for v in [&t.v0, &t.v1, &t.v2] {
-                min.x = min.x.min(v.x);
-                min.y = min.y.min(v.y);
-                min.z = min.z.min(v.z);
-                max.x = max.x.max(v.x);
-                max.y = max.y.max(v.y);
-                max.z = max.z.max(v.z);
-            }
+        if self.nodes.is_empty() {
+            AABB::new(Vec3::ZERO, Vec3::ZERO)
+        } else {
+            self.nodes[self.root].bbox.clone()
         }
-
-        AABB::new(min, max)
     }
 }
