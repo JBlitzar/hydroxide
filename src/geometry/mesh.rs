@@ -97,7 +97,7 @@ impl MeshBVH {
         bvh.root = bvh.build_bvh(0, bvh.triangles.len());
         bvh
     }
-    pub fn from_stl(path: &str, material: Box<dyn Material>) -> Self {
+    pub fn from_stl(path: &str, material: Box<dyn Material>, scale: f64, offset: Vec3) -> Self {
         let mut file = std::fs::File::open(path).expect("failed to open STL file");
         let stl = stl_io::read_stl(&mut file).expect("failed to read STL file");
         let triangles = stl
@@ -105,23 +105,26 @@ impl MeshBVH {
             .into_iter()
             .map(|face| {
                 let v0 = Vec3::new(
-                    stl.vertices[face.vertices[0] as usize][0] as f64,
-                    stl.vertices[face.vertices[0] as usize][1] as f64,
-                    stl.vertices[face.vertices[0] as usize][2] as f64,
+                    stl.vertices[face.vertices[0] as usize][0] as f64 * scale + offset.x,
+                    stl.vertices[face.vertices[0] as usize][1] as f64 * scale + offset.y,
+                    stl.vertices[face.vertices[0] as usize][2] as f64 * scale + offset.z,
                 );
                 let v1 = Vec3::new(
-                    stl.vertices[face.vertices[1] as usize][0] as f64,
-                    stl.vertices[face.vertices[1] as usize][1] as f64,
-                    stl.vertices[face.vertices[1] as usize][2] as f64,
+                    stl.vertices[face.vertices[1] as usize][0] as f64 * scale + offset.x,
+                    stl.vertices[face.vertices[1] as usize][1] as f64 * scale + offset.y,
+                    stl.vertices[face.vertices[1] as usize][2] as f64 * scale + offset.z,
                 );
                 let v2 = Vec3::new(
-                    stl.vertices[face.vertices[2] as usize][0] as f64,
-                    stl.vertices[face.vertices[2] as usize][1] as f64,
-                    stl.vertices[face.vertices[2] as usize][2] as f64,
+                    stl.vertices[face.vertices[2] as usize][0] as f64 * scale + offset.x,
+                    stl.vertices[face.vertices[2] as usize][1] as f64 * scale + offset.y,
+                    stl.vertices[face.vertices[2] as usize][2] as f64 * scale + offset.z,
                 );
+                // println!("v0: {:?}, v1: {:?}, v2: {:?}\n", v0, v1, v2);
                 Triangle::new(v0, v1, v2)
             })
             .collect();
+
+        
         MeshBVH::new(triangles, material)
     }
     pub fn build_cube(center: Vec3, size: f64, material: Box<dyn Material>) -> Self {

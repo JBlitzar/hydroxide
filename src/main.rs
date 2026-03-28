@@ -16,12 +16,13 @@ use crate::world::World;
 
 fn main() {
     fastrand::seed(42);
-    let mut objects: Vec<Arc<dyn geometry::Hittable>> = vec![Arc::new(MeshBVH::build_cube(
-        Vec3::new(0.0, 0.0, -5.0),
-        2.0,
+    let mut objects: Vec<Arc<dyn geometry::Hittable>> = vec![Arc::new(MeshBVH::from_stl(
+        "teapot.stl",
         Box::new(Lambertian {
             albedo: Vec3::new(0.5, 0.5, 0.5),
         }),
+        0.1,
+        Vec3::new(0.0, 0.0, -5.0),
     ))];
     let objects = BVHNode::of_objects_and_endpoints(&mut objects);
 
