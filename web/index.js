@@ -52,7 +52,7 @@ function displayFrame(rgba, w, h, label) {
     ctx.putImageData(imgData, 0, 0);
   }
   info.innerHTML =
-    "<a href='https://github.com/jblitzar/oxide' target='_blank'>[Github]</a> " +
+    "<a href='https://github.com/jblitzar/oxide' target='_blank'>[Github]</a> | " +
     label;
 }
 
