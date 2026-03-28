@@ -48,15 +48,19 @@ impl AABB {
         }
     }
 
-    //TODO check for correctness?
-    pub fn hit(&self, ray: &Ray) -> bool {
+    pub fn hit(&self, ray: &Ray, t_max_bound: f64) -> bool {
+        let mut t_enter: f64 = 0.001;
+        let mut t_exit: f64 = t_max_bound;
+
         for axis in 0..3 {
             let t0 = (self.min[axis] - ray.origin[axis]) / ray.direction[axis];
             let t1 = (self.max[axis] - ray.origin[axis]) / ray.direction[axis];
-            let t_min = t0.min(t1);
-            let t_max = t0.max(t1);
+            let (t0, t1) = if t0 < t1 { (t0, t1) } else { (t1, t0) };
 
-            if t_max < 0.0 || t_min > t_max {
+            t_enter = t_enter.max(t0);
+            t_exit = t_exit.min(t1);
+
+            if t_exit < t_enter {
                 return false;
             }
         }
@@ -71,14 +75,18 @@ pub struct BVHNode {
     right: Arc<dyn Hittable>,
     bbox: AABB,
 }
-impl Hittable for BVHNode {
-    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
-        if !self.bbox.hit(ray) {
+
+impl BVHNode {
+    fn _hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
+        if !self.bbox.hit(ray, t_max) {
             return None;
         }
 
-        let left_hit = self.left.hit(ray);
-        let right_hit = self.right.hit(ray);
+        let left_hit = self.left.hit(ray, t_max);
+        let right_hit = self.right.hit(
+            ray,
+            t_max.min(left_hit.as_ref().map_or(f64::INFINITY, |hit| hit.t)),
+        );
 
         match (left_hit, right_hit) {
             (Some(l), Some(r)) => {
@@ -92,6 +100,11 @@ impl Hittable for BVHNode {
             (None, Some(r)) => Some(r),
             (None, None) => None,
         }
+    }
+}
+impl Hittable for BVHNode {
+    fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
+        self._hit(ray, t_max)
     }
 
     fn bounding_box(&self) -> AABB {
@@ -164,12 +177,15 @@ impl BVHNode {
         Self { left, right, bbox }
     }
 
-    pub fn hit(&self, ray: &Ray) -> Option<HitRecord<'_>> {
-        if !self.bbox.hit(ray) {
+    pub fn hit(&self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
+        if !self.bbox.hit(ray, t_max) {
             return None;
         }
-        let left_hit = self.left.hit(ray);
-        let right_hit = self.right.hit(ray);
+        let left_hit = self.left.hit(ray, t_max);
+        let right_hit = self.right.hit(
+            ray,
+            t_max.min(left_hit.as_ref().map_or(f64::INFINITY, |hit| hit.t)),
+        );
 
         match (left_hit, right_hit) {
             (Some(lh), Some(rh)) => {

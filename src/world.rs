@@ -27,14 +27,14 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(camera: Camera, objects: BVHNode) -> Self {
+    pub fn new(camera: Camera, objects: BVHNode, samples: Option<usize>) -> Self {
         let img_buffer = vec![0; camera.width_px * camera.height_px * 3];
         World {
             camera,
             img_buffer,
             objects,
-            termination_prob: 0.1,
-            samples: 20,
+            termination_prob: 0.01,
+            samples: samples.unwrap_or(20),
         }
     }
     pub fn new_random_spheres(camera: Camera, num_spheres: usize) -> Self {
@@ -86,7 +86,7 @@ impl World {
         }));
         let objects = BVHNode::of_objects_and_endpoints(&mut objects_vec);
 
-        return World::new(camera, objects);
+        return World::new(camera, objects, None);
     }
 
     pub fn render(&mut self) {
@@ -131,7 +131,7 @@ impl World {
         let mut current_ray = self.camera.get_ray_direction(x, y);
         let mut current_color = Vec3::new(1.0, 1.0, 1.0);
         loop {
-            if let Some(hit) = self.objects.hit(&current_ray) {
+            if let Some(hit) = self.objects.hit(&current_ray, f64::INFINITY) {
                 if let Some((scattered, attenuation)) = hit.material.scatter(&current_ray, &hit) {
                     current_ray = scattered;
                     current_color = current_color.mul(&attenuation);

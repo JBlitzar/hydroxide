@@ -6,7 +6,7 @@ pub mod plane;
 pub mod sphere;
 
 pub trait Hittable: Send + Sync {
-    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>>;
+    fn hit(&self, ray: &Ray, t_max: f64) -> Option<HitRecord>;
 
     fn bounding_box(&self) -> AABB;
 }
@@ -17,10 +17,10 @@ pub struct HittableList {
     pub bounding_box: Option<AABB>,
 }
 impl Hittable for HittableList {
-    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
+    fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         let mut closest_hit: Option<HitRecord> = None;
         for obj in &self.objs {
-            if let Some(hit) = obj.hit(ray) {
+            if let Some(hit) = obj.hit(ray, t_max) {
                 if closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t {
                     closest_hit = Some(hit);
                 }
@@ -56,7 +56,7 @@ impl HittableList {
     pub fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
         let mut closest_hit: Option<HitRecord> = None;
         for obj in &self.objs {
-            if let Some(hit) = obj.hit(ray) {
+            if let Some(hit) = obj.hit(ray, f64::INFINITY) {
                 if closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t {
                     closest_hit = Some(hit);
                 }

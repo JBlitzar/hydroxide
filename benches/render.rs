@@ -46,6 +46,7 @@ fn bench_render_cube(c: &mut Criterion) {
                     Vec3::new(-0.2, 0.0, 0.0),
                 ),
                 BVHNode::of_objects_and_endpoints(&mut objects_vec),
+                Some(20),
             );
             world.render();
         })

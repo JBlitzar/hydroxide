@@ -128,3 +128,27 @@ impl Material for Dielectric {
         Some((scattered, attenuation))
     }
 }
+
+pub struct Checkerboard {
+    pub scale: f64,
+    pub color_a: Vec3,
+    pub color_b: Vec3,
+}
+
+impl Material for Checkerboard {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> Option<(Ray, Vec3)> {
+        let x = (hit.point.x * self.scale).floor() as i32;
+        let z = (hit.point.z * self.scale).floor() as i32;
+        let color = if (x + z) % 2 == 0 {
+            self.color_a
+        } else {
+            self.color_b
+        };
+
+        let mut dir = random_in_unit_sphere();
+        if dir.dot(&hit.normal) < 0.0 {
+            dir = dir.scalar_mul(-1.0);
+        }
+        Some((Ray::new(hit.point, dir), color))
+    }
+}

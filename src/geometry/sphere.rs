@@ -12,7 +12,7 @@ pub(crate) struct Sphere {
 }
 
 impl Hittable for Sphere {
-    fn hit(&'_ self, ray: &Ray) -> Option<HitRecord<'_>> {
+    fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/simplifyingtheray-sphereintersectioncode
         let oc = ray.origin.sub(&self.center);
         let a = ray.direction.dot(&ray.direction);
@@ -24,7 +24,7 @@ impl Hittable for Sphere {
             None
         } else {
             let t = (-b - discriminant.sqrt()) / (2.0 * a);
-            if t < 0.001 {
+            if t < 0.001 || t >= t_max {
                 return None;
             }
             let point = ray.origin.add(&ray.direction.scalar_mul(t));

@@ -7,6 +7,10 @@ pub struct Vec3 {
     pub(crate) z: f64,
 }
 
+pub fn toRadians(degrees: f64) -> f64 {
+    degrees * std::f64::consts::PI / 180.0
+}
+
 impl Index<usize> for Vec3 {
     type Output = f64;
 
