@@ -90,7 +90,7 @@ impl Triangle {
             normal = normal.scalar_mul(-1.0);
         }
         Some(HitRecord {
-            point: ray.origin.add(&ray.direction.scalar_mul(t)),
+            point: ray.origin.add(&ray.direction.scalar_mul(t)).add(&normal.scalar_mul(1e-3)),
             normal,
             material,
             t,
