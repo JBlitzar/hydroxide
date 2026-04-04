@@ -6,7 +6,6 @@ use std::sync::Arc;
 use crate::bvh::BVHNode;
 use crate::camera::Camera;
 use crate::geometry::Hittable;
-use crate::geometry::sphere::Sphere;
 use crate::light::SphereLight;
 use crate::material::Dielectric;
 use crate::material::Lambertian;
@@ -14,14 +13,12 @@ use crate::material::Material;
 use crate::material::Metal;
 use crate::vec3::Ray;
 use crate::vec3::Vec3;
-use fastrand;
 use rayon::prelude::*;
 
 #[cfg(feature = "native")]
 use indicatif::{ProgressBar, ProgressStyle};
 
 pub struct World {
-    // one world has one camera
     camera: Camera,
     img_buffer: Vec<u8>,
     objects: BVHNode,
@@ -29,7 +26,6 @@ pub struct World {
     samples: usize,
     lights: Vec<SphereLight>,
 }
-
 impl World {
     pub fn new(
         camera: Camera,
@@ -57,7 +53,7 @@ impl World {
                 fastrand::f64() * -20.0 - 5.0,
             );
 
-            let rand_type = fastrand::u8(0..3 as u8);
+            let rand_type = fastrand::u8(0..3_u8);
             let mat: Box<dyn Material>;
             match rand_type {
                 0 => {
@@ -80,8 +76,8 @@ impl World {
                 _ => unreachable!(),
             }
             objects_vec.push(Arc::new(crate::geometry::sphere::Sphere {
-                center: center,
-                radius: radius,
+                center,
+                radius,
                 material: mat,
             }));
         }
@@ -96,7 +92,7 @@ impl World {
         }));
 
 
-        return World::new(camera, objects_vec, None, None);
+        World::new(camera, objects_vec, None, None)
     }
 
     pub fn render(&mut self) {
@@ -124,7 +120,7 @@ impl World {
                     for x in 0..width {
                         row[x] = self.cast_rays_and_average(x, y, self.samples);
                         let prev = counter.fetch_add(1, Ordering::Relaxed);
-                        if prev % (width as u64) == 0 {
+                        if prev.is_multiple_of(width as u64) {
                             pb.set_position(prev + 1);
                         }
                     }
@@ -172,6 +168,7 @@ impl World {
         ]
     }
 
+    #[allow(non_snake_case)]
     pub fn cast_ray(&self, x: usize, y: usize) -> Vec3 {
         let mut beta = Vec3::new(1.0, 1.0, 1.0);
         let mut L = Vec3::ZERO;
@@ -308,11 +305,10 @@ impl World {
         let origin = x.add(&n.scalar_mul(eps));
         let shadow_ray = Ray::new(origin, wi);
         let t_max = (dist - eps).max(0.0);
-        if t_max > 0.0 {
-            if self.objects.hit(&shadow_ray, t_max).is_some() {
+        if t_max > 0.0
+            && self.objects.hit(&shadow_ray, t_max).is_some() {
                 return Vec3::ZERO;
             }
-        }
 
         let pdf_area = 1.0 / (4.0 * PI * light.radius * light.radius);
         let pdf_omega = pdf_area * dist2 / cos_light;

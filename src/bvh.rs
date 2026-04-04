@@ -115,6 +115,12 @@ impl Hittable for BVHNode {
         self.bbox.clone()
     }
 }
+impl Default for BVHNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BVHNode {
     pub fn new() -> Self {
         BVHNode {

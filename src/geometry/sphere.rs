@@ -5,10 +5,10 @@ use crate::{
     vec3::{Ray, Vec3},
 };
 
-pub(crate) struct Sphere {
-    pub(crate) center: Vec3,
-    pub(crate) radius: f64,
-    pub(crate) material: Box<dyn Material>,
+pub struct Sphere {
+    pub center: Vec3,
+    pub radius: f64,
+    pub material: Box<dyn Material>,
 }
 
 impl Hittable for Sphere {

@@ -65,7 +65,7 @@ impl Triangle {
 
         let tvec = ray.origin.sub(&self.v0);
         let u = tvec.dot(&pvec) * inv_det;
-        if u < 0.0 || u > 1.0 {
+        if !(0.0..=1.0).contains(&u) {
             return None;
         }
 
@@ -140,9 +140,9 @@ impl MeshBVH {
             .iter()
             .map(|face| {
                 [
-                    face.vertices[0] as usize,
-                    face.vertices[1] as usize,
-                    face.vertices[2] as usize,
+                    face.vertices[0],
+                    face.vertices[1],
+                    face.vertices[2],
                 ]
             })
             .collect();

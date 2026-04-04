@@ -13,9 +13,7 @@ use crate::material::Checkerboard;
 use crate::material::Dielectric;
 
 use crate::material::DiffuseLight;
-use crate::material::Metal;
 
-use crate::bvh::BVHNode;
 use crate::camera::Camera;
 use crate::geometry::mesh::MeshBVH;
 use crate::material::Lambertian;
@@ -35,7 +33,7 @@ fn main() {
         width, height, samples, roulette
     );
 
-    let mut objects: Vec<Arc<dyn geometry::Hittable>> = vec![
+    let objects: Vec<Arc<dyn geometry::Hittable>> = vec![
         Arc::new(MeshBVH::from_stl(
             "teapot_fixed.stl",
             Box::new(Dielectric {
