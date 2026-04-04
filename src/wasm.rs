@@ -112,6 +112,7 @@ impl WasmRenderer {
             self.scene.clone(),
             Some(samples as usize),
             Some(termination_prob),
+            None,
         );
         world.render();
         world.take_buffer_rgba()

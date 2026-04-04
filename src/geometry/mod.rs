@@ -9,6 +9,7 @@ pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>>;
 
     fn bounding_box(&self) -> AABB;
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 pub struct HittableList {
@@ -17,6 +18,9 @@ pub struct HittableList {
     pub bounding_box: Option<AABB>,
 }
 impl Hittable for HittableList {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         let mut closest_hit: Option<HitRecord> = None;
         for obj in &self.objs {

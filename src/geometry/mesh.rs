@@ -90,7 +90,10 @@ impl Triangle {
             normal = normal.scalar_mul(-1.0);
         }
         Some(HitRecord {
-            point: ray.origin.add(&ray.direction.scalar_mul(t)).add(&normal.scalar_mul(1e-3)),
+            point: ray
+                .origin
+                .add(&ray.direction.scalar_mul(t))
+                .add(&normal.scalar_mul(1e-3)),
             normal,
             material,
             t,
@@ -388,6 +391,9 @@ impl MeshBVH {
 }
 
 impl Hittable for MeshBVH {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         self.hit(ray, t_max)
     }

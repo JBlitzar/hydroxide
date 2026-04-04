@@ -1,6 +1,7 @@
 mod bvh;
 mod camera;
 mod geometry;
+mod light;
 mod material;
 mod vec3;
 mod world;
@@ -27,12 +28,13 @@ fn main() {
     let (width, height, samples, roulette) = if cheap {
         (320, 240, 20, 0.1)
     } else {
-        (1920, 1080, 3_000, 0.1)
+        (1920, 1080, 500, 0.1)
     };
     println!(
         "Rendering at {}x{} with {} samples per pixel and termination probability of {}",
         width, height, samples, roulette
     );
+
     let mut objects: Vec<Arc<dyn geometry::Hittable>> = vec![
         Arc::new(MeshBVH::from_stl(
             "teapot_fixed.stl",
@@ -54,23 +56,23 @@ fn main() {
             Some(Vec3::new(0.0, 0.0, 0.0)),
         )),
         Arc::new(geometry::sphere::Sphere {
-            center: Vec3::new(-2.0, 5.0, -5.0),
-            radius: 0.7,
-            material: Box::new(DiffuseLight {
-                albedo: Vec3::new(0.15, 6.0, 6.0),
-            }),
+        center: Vec3::new(2.0, 5.0, -5.0),
+        radius: 2.0,
+        material: Box::new(DiffuseLight {
+            albedo: Vec3::new(3.0, 0.3, 0.3),
         }),
+        // material: Box::new(Dielectric {
+        //     albedo: Vec3::new(1.0, 1.0, 1.0),
+        //     refractive_index: 1.5,
+        // }),
+    }),
         Arc::new(geometry::sphere::Sphere {
-            center: Vec3::new(2.0, 5.0, -5.0),
-            radius: 0.7,
-            material: Box::new(DiffuseLight {
-                albedo: Vec3::new(6.0, 0.6, 0.6),
-            }),
-            // material: Box::new(Dielectric {
-            //     albedo: Vec3::new(1.0, 1.0, 1.0),
-            //     refractive_index: 1.5,
-            // }),
+        center: Vec3::new(-2.0, 5.0, -5.0),
+        radius: 2.0,
+        material: Box::new(DiffuseLight {
+            albedo: Vec3::new(0.05, 3.0, 3.0),
         }),
+    }),
         Arc::new(geometry::sphere::Sphere {
             center: Vec3::new(0.0, 0.7, -5.0),
             radius: 0.7,
@@ -93,7 +95,7 @@ fn main() {
             }),
         }),
     ];
-    let objects = BVHNode::of_objects_and_endpoints(&mut objects);
+    // let objects = BVHNode::of_objects_and_endpoints(&mut objects);
 
     let mut world = World::new(
         Camera::look_at(
@@ -111,9 +113,8 @@ fn main() {
     );
     let start = std::time::Instant::now();
     world.render();
+    println!("Render time: {:?}", start.elapsed());
     world.save_image("output.png");
-    let duration = start.elapsed();
-    println!("Render time: {:?}", duration);
     println!("Image hash: {:x}", world.hash_buf());
 }
 

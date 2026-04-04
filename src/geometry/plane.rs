@@ -11,6 +11,10 @@ pub struct Plane {
     pub(crate) material: Box<dyn Material>,
 }
 impl Hittable for Plane {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
     fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         let denom = self.normal.dot(&ray.direction);
         if denom.abs() > 1e-6 {

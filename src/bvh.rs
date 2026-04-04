@@ -103,6 +103,10 @@ impl BVHNode {
     }
 }
 impl Hittable for BVHNode {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         self._hit(ray, t_max)
     }

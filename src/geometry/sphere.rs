@@ -12,6 +12,10 @@ pub(crate) struct Sphere {
 }
 
 impl Hittable for Sphere {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#surfacenormalsandmultipleobjects/simplifyingtheray-sphereintersectioncode
         let oc = ray.origin.sub(&self.center);

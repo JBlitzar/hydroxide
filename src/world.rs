@@ -1,19 +1,24 @@
+use std::f64::consts::PI;
 use std::hash::Hash;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::bvh::BVHNode;
 use crate::camera::Camera;
 use crate::geometry::Hittable;
+use crate::geometry::sphere::Sphere;
+use crate::light::SphereLight;
 use crate::material::Dielectric;
 use crate::material::Lambertian;
 use crate::material::Material;
 use crate::material::Metal;
+use crate::vec3::Ray;
 use crate::vec3::Vec3;
 use fastrand;
 use rayon::prelude::*;
 
 #[cfg(feature = "native")]
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 
 pub struct World {
     // one world has one camera
@@ -22,12 +27,13 @@ pub struct World {
     objects: BVHNode,
     termination_prob: f64,
     samples: usize,
+    lights: Vec<SphereLight>,
 }
 
 impl World {
     pub fn new(
         camera: Camera,
-        objects: BVHNode,
+        objects: Vec<Arc<dyn Hittable>>,
         samples: Option<usize>,
         termination_prob: Option<f64>,
     ) -> Self {
@@ -35,9 +41,10 @@ impl World {
         World {
             camera,
             img_buffer,
-            objects,
+            objects: BVHNode::of_objects_and_endpoints(&mut objects.clone()),
             termination_prob: termination_prob.unwrap_or(0.01),
             samples: samples.unwrap_or(20),
+            lights: SphereLight::of_mixed_objects(objects.clone()),
         }
     }
     pub fn new_random_spheres(camera: Camera, num_spheres: usize) -> Self {
@@ -87,9 +94,9 @@ impl World {
             radius: 1000.0,
             material: ground_material,
         }));
-        let objects = BVHNode::of_objects_and_endpoints(&mut objects_vec);
 
-        return World::new(camera, objects, None, None);
+
+        return World::new(camera, objects_vec, None, None);
     }
 
     pub fn render(&mut self) {
@@ -99,19 +106,27 @@ impl World {
 
         #[cfg(feature = "native")]
         let pixels: Vec<[u8; 3]> = {
-            let pb = ProgressBar::new(height as u64);
+            let pb = ProgressBar::new(total as u64);
             pb.set_style(
-                ProgressStyle::with_template("{wide_bar} {pos}/{len} ({eta}) | ({elapsed} elapsed)")
-                    .expect("invalid progress bar template")
-                    .progress_chars("=>-"),
+                ProgressStyle::with_template(
+                    "{wide_bar} {pos}/{len} ({eta}) | ({elapsed} elapsed)",
+                )
+                .expect("invalid progress bar template")
+                .progress_chars("=>-"),
             );
+            pb.enable_steady_tick(std::time::Duration::from_millis(100));
+            let counter = AtomicU64::new(0);
             let mut out = vec![[0u8; 3]; total];
             out.par_chunks_mut(width)
-                .progress_with(pb.clone())
                 .enumerate()
+                .with_min_len(1)
                 .for_each(|(y, row)| {
                     for x in 0..width {
                         row[x] = self.cast_rays_and_average(x, y, self.samples);
+                        let prev = counter.fetch_add(1, Ordering::Relaxed);
+                        if prev % (width as u64) == 0 {
+                            pb.set_position(prev + 1);
+                        }
                     }
                 });
             pb.finish_and_clear();
@@ -158,53 +173,60 @@ impl World {
     }
 
     pub fn cast_ray(&self, x: usize, y: usize) -> Vec3 {
+        let mut beta = Vec3::new(1.0, 1.0, 1.0);
+        let mut L = Vec3::ZERO;
         let mut current_ray = self.camera.get_ray_direction(x, y);
-        let mut current_color = Vec3::new(1.0, 1.0, 1.0);
-        let mut depth: u32 = 0;
         let max_depth: u32 = 100;
         let sky_color_top = Vec3::new(9.0 / 255.0, 19.0 / 255.0, 84.0 / 255.0);
         let sky_color_bottom = Vec3::new(27.0 / 255.0, 11.0 / 255.0, 150.0 / 255.0);
-               
-        loop {
-            if depth >= max_depth {
-                break;
-            }
+
+        let mut prev_bounce_was_specular = true;
+
+        for depth in 0..max_depth {
             if let Some(hit) = self.objects.hit(&current_ray, f64::INFINITY) {
-                let emitted = hit.material.emitted(&current_ray, &hit);
+                let Le = hit.material.emitted(&current_ray, &hit);
+
+                if prev_bounce_was_specular {
+                    L = L.add(&beta.mul(&Le));
+                }
+
+                if let Some(f_diffuse) = hit.material.eval_diffuse_brdf(&current_ray, &hit) {
+                    let direct =
+                        self.estimate_direct_sphere_lights(&hit.point, &hit.normal, &f_diffuse);
+                    L = L.add(&beta.mul(&direct));
+                    prev_bounce_was_specular = false;
+                } else {
+                    prev_bounce_was_specular = true;
+                }
                 if let Some((scattered, attenuation)) = hit.material.scatter(&current_ray, &hit) {
                     current_ray = scattered;
-                    current_color = current_color.mul(&attenuation);
-                    current_color = current_color.add(&emitted);
-                    if current_color.max_component() < 0.01 {
-                        return Vec3::ZERO;
-                    }
+                    beta = beta.mul(&attenuation);
                 } else {
-                    return current_color.mul(&emitted);
+                    break;
                 }
             } else {
                 let unit_dir = current_ray.direction.normalize();
                 let t = 0.5 * (unit_dir.y + 1.0);
-                 let sky = sky_color_bottom
+                let sky = sky_color_bottom
                     .scalar_mul(1.0 - t)
                     .add(&sky_color_top.scalar_mul(t));
-                return current_color.mul(&sky);
+                // return current_color.mul(&sky);
+                L = L.add(&beta.mul(&sky));
+                break;
             }
-            depth += 1;
 
-            // Throughput-based Russian roulette (after a small minimum depth).
-            // `termination_prob` is used as a *minimum survival probability* clamp.
             if depth >= 5 {
-                let p = current_color
+                let p = beta
                     .max_component()
                     .clamp(self.termination_prob, 0.95)
                     .max(1e-12);
                 if fastrand::f64() > p {
                     break;
                 }
-                current_color = current_color.scalar_mul(1.0 / p);
+                beta = beta.scalar_mul(1.0 / p);
             }
         }
-        sky_color_top
+        L
     }
     fn write_pixel(&mut self, x: usize, y: usize, color: [u8; 3]) {
         let index = (y * self.camera.width_px + x) * 3;
@@ -241,5 +263,64 @@ impl World {
         .expect("invalid image buffer size");
 
         img.save(filename).expect("failed to save PNG image");
+    }
+
+    fn random_unit_vector() -> Vec3 {
+        let z = 1.0 - 2.0 * fastrand::f64();
+        let r = (1.0 - z * z).max(0.0).sqrt();
+        let phi = 2.0 * PI * fastrand::f64();
+        Vec3::new(r * phi.cos(), r * phi.sin(), z)
+    }
+    fn estimate_direct_sphere_lights(&self, x: &Vec3, n: &Vec3, f_diffuse: &Vec3) -> Vec3 {
+        // I honestly just asked AI to generate this function
+        let n_lights = self.lights.len();
+        if n_lights == 0 {
+            return Vec3::ZERO;
+        }
+
+        let light_idx = fastrand::usize(0..n_lights);
+        let light = &self.lights[light_idx];
+        let p_sel = 1.0 / (n_lights as f64);
+
+        let u = World::random_unit_vector();
+        let y = light.center.add(&u.scalar_mul(light.radius));
+        let n_y = u; // normal on sphere
+
+        let d = y.sub(x);
+        let dist2 = d.length_squared();
+        if dist2 <= 1e-12 {
+            return Vec3::ZERO;
+        }
+        let dist = dist2.sqrt();
+        let wi = d.scalar_mul(1.0 / dist);
+
+        let cos_surf = n.dot(&wi).max(0.0);
+        if cos_surf <= 0.0 {
+            return Vec3::ZERO;
+        }
+
+        let cos_light = n_y.dot(&wi.scalar_mul(-1.0)).max(0.0);
+        if cos_light <= 0.0 {
+            return Vec3::ZERO;
+        }
+
+        let eps = 1e-3;
+        let origin = x.add(&n.scalar_mul(eps));
+        let shadow_ray = Ray::new(origin, wi);
+        let t_max = (dist - eps).max(0.0);
+        if t_max > 0.0 {
+            if self.objects.hit(&shadow_ray, t_max).is_some() {
+                return Vec3::ZERO;
+            }
+        }
+
+        let pdf_area = 1.0 / (4.0 * PI * light.radius * light.radius);
+        let pdf_omega = pdf_area * dist2 / cos_light;
+        let pdf = p_sel * pdf_omega;
+        if pdf <= 1e-20 {
+            return Vec3::ZERO;
+        }
+
+        f_diffuse.mul(&light.Le).scalar_mul(cos_surf / pdf)
     }
 }
