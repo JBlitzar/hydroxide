@@ -14,6 +14,7 @@ export class WasmRenderer {
     remove_object(index: number): void;
     render(width: number, height: number, fov: number, cam_x: number, cam_y: number, cam_z: number, target_x: number, target_y: number, target_z: number, samples: number, termination_prob: number, focus_distance: number, aperture: number): Uint8Array;
     set_sky(index: number): void;
+    set_sky_hdr_bytes(bytes: Uint8Array): void;
     sky_count(): number;
     sky_name(index: number): string;
     update_cube(index: number, x: number, y: number, z: number, size: number, mat_type: number, r: number, g: number, b: number, fuzz: number, refractive_index: number): void;
@@ -48,6 +49,7 @@ export interface InitOutput {
     readonly wasmrenderer_remove_object: (a: number, b: number) => void;
     readonly wasmrenderer_render: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => void;
     readonly wasmrenderer_set_sky: (a: number, b: number) => void;
+    readonly wasmrenderer_set_sky_hdr_bytes: (a: number, b: number, c: number) => void;
     readonly wasmrenderer_sky_count: (a: number) => number;
     readonly wasmrenderer_sky_name: (a: number, b: number, c: number) => void;
     readonly wasmrenderer_update_cube: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => void;
@@ -62,6 +64,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
     readonly __wbindgen_export: (a: number, b: number, c: number) => void;
+    readonly __wbindgen_export2: (a: number, b: number) => number;
     readonly __wbindgen_thread_destroy: (a?: number, b?: number, c?: number) => void;
     readonly __wbindgen_start: (a: number) => void;
 }

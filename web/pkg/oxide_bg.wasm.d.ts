@@ -11,6 +11,7 @@ export const wasmrenderer_pick: (a: number, b: number, c: number, d: number, e: 
 export const wasmrenderer_remove_object: (a: number, b: number) => void;
 export const wasmrenderer_render: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => void;
 export const wasmrenderer_set_sky: (a: number, b: number) => void;
+export const wasmrenderer_set_sky_hdr_bytes: (a: number, b: number, c: number) => void;
 export const wasmrenderer_sky_count: (a: number) => number;
 export const wasmrenderer_sky_name: (a: number, b: number, c: number) => void;
 export const wasmrenderer_update_cube: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => void;
@@ -25,5 +26,6 @@ export const wbg_rayon_start_worker: (a: number) => void;
 export const memory: WebAssembly.Memory;
 export const __wbindgen_add_to_stack_pointer: (a: number) => number;
 export const __wbindgen_export: (a: number, b: number, c: number) => void;
+export const __wbindgen_export2: (a: number, b: number) => number;
 export const __wbindgen_thread_destroy: (a?: number, b?: number, c?: number) => void;
 export const __wbindgen_start: (a: number) => void;

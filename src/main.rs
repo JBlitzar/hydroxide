@@ -110,7 +110,7 @@ fn main() {
         Some(samples),
         Some(roulette),
         Some(Box::new({
-            let mut sky = HDRSky::from_hdr_file("res/citrus_orchard_road_puresky_4k.hdr");
+            let mut sky = HDRSky::from_hdr_file("web/res/citrus_orchard_road_puresky_4k.hdr");
             sky.exposure = 0.3;
             sky
         })),

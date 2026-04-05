@@ -167,6 +167,14 @@ export class WasmRenderer {
         wasm.wasmrenderer_set_sky(this.__wbg_ptr, index);
     }
     /**
+     * @param {Uint8Array} bytes
+     */
+    set_sky_hdr_bytes(bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.wasmrenderer_set_sky_hdr_bytes(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
      * @returns {number}
      */
     sky_count() {
@@ -349,7 +357,7 @@ function __wbg_get_imports(memory) {
         __wbindgen_object_drop_ref: function(arg0) {
             takeObject(arg0);
         },
-        memory: memory || new WebAssembly.Memory({initial:608,maximum:65536,shared:true}),
+        memory: memory || new WebAssembly.Memory({initial:29,maximum:65536,shared:true}),
     };
     return {
         __proto__: null,
@@ -429,6 +437,13 @@ function isLikeNone(x) {
     return x === undefined || x === null;
 }
 
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
 function takeObject(idx) {
     const ret = getObject(idx);
     dropObject(idx);
@@ -449,6 +464,8 @@ function decodeText(ptr, len) {
     }
     return cachedTextDecoder.decode(getUint8ArrayMemory0().slice(ptr, ptr + len));
 }
+
+let WASM_VECTOR_LEN = 0;
 
 let wasmModule, wasm;
 function __wbg_finalize_init(instance, module, thread_stack_size) {

@@ -36,6 +36,9 @@ function applyMutation(msg) {
     case "remove_object":
       renderer.remove_object(msg.index);
       break;
+    case "set_sky_hdr_bytes":
+      renderer.set_sky_hdr_bytes(msg.bytes);
+      break;
   }
 }
 

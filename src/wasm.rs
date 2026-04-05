@@ -14,8 +14,12 @@ pub use wasm_bindgen_rayon::init_thread_pool;
 
 static TEAPOT_STL: &[u8] = include_bytes!("../teapot_fixed.stl");
 
-static HDR_CITRUS: &[u8] = include_bytes!("../res/citrus_orchard_road_puresky_4k.hdr");
-static HDR_QWANTANI: &[u8] = include_bytes!("../res/qwantani_moonrise_puresky_4k.hdr");
+struct ArcSky(Arc<HDRSky>);
+impl Sky for ArcSky {
+    fn color(&self, ray: &crate::vec3::Ray) -> Vec3 {
+        self.0.color(ray)
+    }
+}
 
 struct SkyEntry {
     name: &'static str,
@@ -57,14 +61,6 @@ const SKY_TABLE: &[SkyEntry] = &[
             })
         },
     },
-    SkyEntry {
-        name: "Citrus Orchard",
-        build: || Box::new(HDRSky::from_hdr_bytes(HDR_CITRUS)),
-    },
-    SkyEntry {
-        name: "Qwantani Moonrise",
-        build: || Box::new(HDRSky::from_hdr_bytes(HDR_QWANTANI)),
-    },
 ];
 
 // 0=sphere, 1=cube, 2=mesh(STL/readonly geometry)
@@ -81,6 +77,7 @@ pub struct WasmRenderer {
     scene: Vec<Arc<dyn Hittable>>,
     kinds: Vec<ObjectKind>,
     sky_index: usize,
+    hdr_sky: Option<Arc<HDRSky>>,
 }
 
 #[wasm_bindgen]
@@ -150,6 +147,7 @@ impl WasmRenderer {
             scene: objects,
             kinds,
             sky_index: 0,
+            hdr_sky: None,
         }
     }
 
@@ -169,10 +167,18 @@ impl WasmRenderer {
     pub fn set_sky(&mut self, index: u32) {
         if (index as usize) < SKY_TABLE.len() {
             self.sky_index = index as usize;
+            self.hdr_sky = None;
         }
     }
 
+    pub fn set_sky_hdr_bytes(&mut self, bytes: &[u8]) {
+        self.hdr_sky = Some(Arc::new(HDRSky::from_hdr_bytes(bytes)));
+    }
+
     fn build_sky(&self) -> Box<dyn Sky> {
+        if let Some(ref hdr) = self.hdr_sky {
+            return Box::new(ArcSky(Arc::clone(hdr)));
+        }
         (SKY_TABLE[self.sky_index].build)()
     }
 

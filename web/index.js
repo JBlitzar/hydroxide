@@ -292,24 +292,54 @@ function spawnWorker() {
 }
 
 // --- Sky ---
+const HDR_SKIES = [
+  { name: "Citrus Orchard", url: "res/citrus_orchard_road_puresky_4k.hdr" },
+  { name: "Qwantani Moonrise", url: "res/qwantani_moonrise_puresky_4k.hdr" },
+];
+const hdrCache = new Map(); // url -> Uint8Array
+
 function populateSkys() {
   if (!mainRenderer) return;
   skySelect.innerHTML = "";
   const count = mainRenderer.sky_count();
   for (let i = 0; i < count; i++) {
     const opt = document.createElement("option");
-    opt.value = i;
+    opt.value = `builtin:${i}`;
     opt.textContent = mainRenderer.sky_name(i);
+    skySelect.appendChild(opt);
+  }
+  for (const hdr of HDR_SKIES) {
+    const opt = document.createElement("option");
+    opt.value = `hdr:${hdr.url}`;
+    opt.textContent = hdr.name;
     skySelect.appendChild(opt);
   }
 }
 
-skySelect.addEventListener("change", () => {
+async function loadHdrSky(url) {
+  if (hdrCache.has(url)) return hdrCache.get(url);
+  info.textContent = "Loading HDR...";
+  const resp = await fetch(url);
+  const buf = new Uint8Array(await resp.arrayBuffer());
+  hdrCache.set(url, buf);
+  return buf;
+}
+
+skySelect.addEventListener("change", async () => {
   if (!mainRenderer) return;
-  const idx = parseInt(skySelect.value);
-  mainRenderer.set_sky(idx);
-  sendWorkerMessage({ type: "set_sky", index: idx });
-  fullRerender();
+  const val = skySelect.value;
+  if (val.startsWith("builtin:")) {
+    const idx = parseInt(val.split(":")[1]);
+    mainRenderer.set_sky(idx);
+    sendWorkerMessage({ type: "set_sky", index: idx });
+    fullRerender();
+  } else if (val.startsWith("hdr:")) {
+    const url = val.split(":").slice(1).join(":");
+    const bytes = await loadHdrSky(url);
+    mainRenderer.set_sky_hdr_bytes(bytes);
+    sendWorkerMessage({ type: "set_sky_hdr_bytes", bytes });
+    fullRerender();
+  }
 });
 
 // --- Picking ---
