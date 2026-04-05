@@ -43,6 +43,9 @@ let currentPass = 0;
 let mutationLog = [];
 const workerUrl = new URL("./render-worker.js", import.meta.url);
 
+let spareWorker = null;
+let spareReady = false;
+
 const skySelect = document.getElementById("sky-select");
 const panel = document.getElementById("panel");
 const panelContent = document.getElementById("panel-content");
@@ -247,6 +250,7 @@ function onWorkerMessage(e) {
 function sendWorkerMessage(msg) {
   mutationLog.push(msg);
   if (qualityWorker) qualityWorker.postMessage(msg);
+  if (spareWorker) spareWorker.postMessage(msg);
 }
 
 function invalidateAndKick() {
@@ -261,13 +265,34 @@ function fullRerender() {
   kick();
 }
 
+function warmSpare() {
+  if (spareWorker) spareWorker.terminate();
+  spareReady = false;
+  spareWorker = new Worker(workerUrl, { type: "module" });
+  spareWorker.onmessage = (e) => {
+    if (e.data.type === "ready") spareReady = true;
+  };
+  for (const msg of mutationLog) spareWorker.postMessage(msg);
+}
+
 function spawnWorker() {
   if (qualityWorker) qualityWorker.terminate();
-  workerReady = false;
-  workerBusy = false;
-  qualityWorker = new Worker(workerUrl, { type: "module" });
-  qualityWorker.onmessage = onWorkerMessage;
-  for (const msg of mutationLog) qualityWorker.postMessage(msg);
+  if (spareReady && spareWorker) {
+    qualityWorker = spareWorker;
+    workerReady = true;
+    workerBusy = false;
+    qualityWorker.onmessage = onWorkerMessage;
+    spareWorker = null;
+    spareReady = false;
+    warmSpare();
+    if (!isDragging) kick();
+  } else {
+    workerReady = false;
+    workerBusy = false;
+    qualityWorker = new Worker(workerUrl, { type: "module" });
+    qualityWorker.onmessage = onWorkerMessage;
+    for (const msg of mutationLog) qualityWorker.postMessage(msg);
+  }
 }
 
 const HDR_SKIES = [
@@ -618,8 +643,6 @@ window.addEventListener("mouseup", (e) => {
       loadObjectToPanel(hit);
     } else {
       deselect();
-      isDragging = false;
-      return;
     }
   }
   isDragging = false;
@@ -651,6 +674,7 @@ async function main() {
   canvas.height = window.innerHeight;
   renderPreview();
   spawnWorker();
+  warmSpare();
 }
 
 main();
