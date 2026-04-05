@@ -21,9 +21,20 @@
         image-rendering: crisp-edges;
         image-rendering: pixelated;
       }
-      #info {
+      .infolike {
         position: fixed;
         top: 10px;
+        left: 10px;
+        color: #fff;
+        font-family: monospace;
+        font-size: 14px;
+        z-index: 10;
+        pointer-events: auto;
+        text-shadow: 0 0 4px #000;
+      }
+      .i2 {
+        position: fixed;
+        top: 32px;
         left: 10px;
         color: #fff;
         font-family: monospace;
@@ -182,7 +193,13 @@
   <body>
     <canvas id="canvas"></canvas>
 
-    <div id="info">Loading WASM...</div>
+    <div id="info" class="infolike">Loading WASM...</div>
+    <br />
+    <div class="i2">
+      Drag to rotate.<br />
+      Scroll to zoom.<br />
+      Click to select.
+    </div>
     <select id="sky-select"></select>
 
     <!-- Editor panel -->
@@ -205,11 +222,23 @@
 
         <div id="param-radius">
           <label>Radius</label>
-          <input type="number" id="obj-radius" step="0.1" value="0.7" min="0.01" />
+          <input
+            type="number"
+            id="obj-radius"
+            step="0.1"
+            value="0.7"
+            min="0.01"
+          />
         </div>
-        <div id="param-size" style="display:none">
+        <div id="param-size" style="display: none">
           <label>Size</label>
-          <input type="number" id="obj-size" step="0.1" value="1.0" min="0.01" />
+          <input
+            type="number"
+            id="obj-size"
+            step="0.1"
+            value="1.0"
+            min="0.01"
+          />
         </div>
 
         <label>Material</label>
@@ -225,11 +254,25 @@
 
         <div class="mat-field" id="field-fuzz">
           <label>Fuzz</label>
-          <input type="range" id="mat-fuzz" min="0" max="1" step="0.01" value="0" />
+          <input
+            type="range"
+            id="mat-fuzz"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0"
+          />
         </div>
         <div class="mat-field" id="field-ri">
           <label>Refractive Index</label>
-          <input type="number" id="mat-ri" min="1" max="3" step="0.01" value="1.5" />
+          <input
+            type="number"
+            id="mat-ri"
+            min="1"
+            max="3"
+            step="0.01"
+            value="1.5"
+          />
         </div>
 
         <button class="btn" id="btn-apply">Apply</button>

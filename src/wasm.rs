@@ -73,6 +73,7 @@ enum ObjectKind {
     Sphere,
     Cube,
     Mesh,
+    Ground,
 }
 
 #[wasm_bindgen]
@@ -143,7 +144,7 @@ impl WasmRenderer {
             ObjectKind::Sphere, // green light
             ObjectKind::Sphere, // metal sphere
             ObjectKind::Cube,   // cube
-            ObjectKind::Sphere, // ground checkerboard
+            ObjectKind::Ground, // ground checkerboard
         ];
         WasmRenderer {
             scene: objects,
@@ -210,8 +211,8 @@ impl WasmRenderer {
             Some(self.build_sky()),
         );
         match world.pick_index(pixel_x as usize, pixel_y as usize) {
-            Some(i) => i as i32,
-            None => -1,
+            Some(i) if i < self.kinds.len() && self.kinds[i] != ObjectKind::Ground => i as i32,
+            _ => -1,
         }
     }
 
@@ -275,7 +276,7 @@ impl WasmRenderer {
         let obj = &self.scene[idx];
         let kind = self.kinds[idx];
         let obj_type_f = match kind {
-            ObjectKind::Sphere => 0.0,
+            ObjectKind::Sphere | ObjectKind::Ground => 0.0,
             ObjectKind::Cube => 1.0,
             ObjectKind::Mesh => 2.0,
         };

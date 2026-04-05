@@ -1,6 +1,6 @@
 # oxide
 
-![](docs/hero.png)
+![](docs/colored_lighting.png)
 
 ### Run it here!
 
