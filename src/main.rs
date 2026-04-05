@@ -24,11 +24,11 @@ use crate::world::World;
 
 fn main() {
     fastrand::seed(42);
-    let cheap = option_env!("OXIDE_PROFILE") == Some("iteration");
-    let (width, height, samples, roulette) = if cheap {
-        (320, 240, 20, 0.1)
-    } else {
-        (1920, 1080, 100, 0.1)
+    let profile = env!("OXIDE_PROFILE");
+    let (width, height, samples, roulette) = match profile {
+        "iteration" => (320, 240, 20, 0.1),
+        "extra" => (3840, 2160, 1_000, 0.05),
+        _ => (1920, 1080, 100, 0.1),
     };
     println!(
         "Rendering at {}x{} with {} samples per pixel and termination probability of {}",
