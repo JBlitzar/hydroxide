@@ -7,7 +7,7 @@ ctx.imageSmoothingEnabled = false;
 
 let azimuth = 0;
 let elevation = 0.1;
-let distance = 6.0;
+let distance = 8.0;
 const target = { x: 0, y: 0.7, z: -7 };
 
 let isDragging = false;
@@ -15,7 +15,7 @@ let dragMoved = false;
 let lastX = 0,
   lastY = 0;
 const FOV = Math.PI / 2;
-const FOCUS_DISTANCE = 8.0;
+const FOCUS_DISTANCE = 10.0;
 const APERTURE = 0.04;
 
 const PREVIEW_SCALE = 0.125;
