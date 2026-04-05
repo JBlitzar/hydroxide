@@ -3,16 +3,18 @@ mod camera;
 mod geometry;
 mod light;
 mod material;
+mod sky;
 mod vec3;
 mod world;
 
 use std::sync::Arc;
 
+use crate::sky::HDRSky;
+
 use crate::material::Checkerboard;
 
 use crate::material::Dielectric;
 
-use crate::material::DiffuseLight;
 
 use crate::camera::Camera;
 use crate::geometry::mesh::MeshBVH;
@@ -26,7 +28,7 @@ fn main() {
     let (width, height, samples, roulette) = if cheap {
         (320, 240, 20, 0.1)
     } else {
-        (1920, 1080, 500, 0.1)
+        (1920, 1080, 100, 0.1)
     };
     println!(
         "Rendering at {}x{} with {} samples per pixel and termination probability of {}",
@@ -45,7 +47,7 @@ fn main() {
             None,
         )),
         Arc::new(MeshBVH::from_stl(
-            "dragon.stl",
+            "dragon_fixed.stl",
             Box::new(Lambertian {
                 albedo: Vec3::new(0.7, 1.0, 1.0),
             }),
@@ -53,24 +55,24 @@ fn main() {
             Some(Vec3::new(2.0, -0.5, -5.0)),
             Some(Vec3::new(0.0, 0.0, 0.0)),
         )),
-        Arc::new(geometry::sphere::Sphere {
-        center: Vec3::new(2.0, 5.0, -5.0),
-        radius: 2.0,
-        material: Box::new(DiffuseLight {
-            albedo: Vec3::new(3.0, 0.3, 0.3),
-        }),
-        // material: Box::new(Dielectric {
-        //     albedo: Vec3::new(1.0, 1.0, 1.0),
-        //     refractive_index: 1.5,
+        //     Arc::new(geometry::sphere::Sphere {
+        //     center: Vec3::new(2.0, 5.0, -5.0),
+        //     radius: 2.0,
+        //     material: Box::new(DiffuseLight {
+        //         albedo: Vec3::new(3.0, 0.3, 0.3),
+        //     }),
+        //     // material: Box::new(Dielectric {
+        //     //     albedo: Vec3::new(1.0, 1.0, 1.0),
+        //     //     refractive_index: 1.5,
+        //     // }),
         // }),
-    }),
-        Arc::new(geometry::sphere::Sphere {
-        center: Vec3::new(-2.0, 5.0, -5.0),
-        radius: 2.0,
-        material: Box::new(DiffuseLight {
-            albedo: Vec3::new(0.05, 3.0, 3.0),
-        }),
-    }),
+        //     Arc::new(geometry::sphere::Sphere {
+        //     center: Vec3::new(-2.0, 5.0, -5.0),
+        //     radius: 2.0,
+        //     material: Box::new(DiffuseLight {
+        //         albedo: Vec3::new(0.05, 3.0, 3.0),
+        //     }),
+        // }),
         Arc::new(geometry::sphere::Sphere {
             center: Vec3::new(0.0, 0.7, -5.0),
             radius: 0.7,
@@ -108,6 +110,11 @@ fn main() {
         objects,
         Some(samples),
         Some(roulette),
+        Some(Box::new({
+            let mut sky = HDRSky::from_hdr_file("res/citrus_orchard_road_puresky_4k.hdr");
+            sky.exposure = 0.3;
+            sky
+        })),
     );
     let start = std::time::Instant::now();
     world.render();

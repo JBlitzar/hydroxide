@@ -2,6 +2,8 @@ use crate::bvh::BVHNode;
 use crate::camera::Camera;
 use crate::geometry::Hittable;
 use crate::geometry::mesh::MeshBVH;
+use crate::geometry::*;
+use crate::material::DiffuseLight;
 use crate::material::{Checkerboard, Dielectric, Lambertian, Material, Metal};
 use crate::vec3::Vec3;
 use crate::world::World;
@@ -11,11 +13,11 @@ use wasm_bindgen::prelude::*;
 pub use wasm_bindgen_rayon::init_thread_pool;
 
 static TEAPOT_STL: &[u8] = include_bytes!("../teapot_fixed.stl");
-// static DRAGON_STL: &[u8] = include_bytes!("../dragon.stl");
+// static DRAGON_STL: &[u8] = include_bytes!("../dragon_fixed.stl");
 
 #[wasm_bindgen]
 pub struct WasmRenderer {
-    scene: BVHNode,
+    scene: Vec<Arc<dyn Hittable>>,
 }
 
 #[wasm_bindgen]
@@ -31,43 +33,40 @@ impl WasmRenderer {
                     refractive_index: 1.7,
                 }),
                 Some(2.0),
-                Some(Vec3::new(0.0, 0.0, -5.0)),
+                Some(Vec3::new(-2.0, 0.0, -5.0)),
                 None,
             )),
-            // Arc::new(MeshBVH::from_stl_bytes(
-            //     DRAGON_STL,
-            //     Box::new(Metal {
-            //         albedo: Vec3::new(0.7, 1.0, 1.0),
-            //         fuzz: 0.9,
-            //     }),
-            //     Some(2.0),
-            //     Some(Vec3::new(1.0, -0.5, -5.0)),
-            //     Some(Vec3::new(0.0, 0.0, 0.0)),
-            // )),
-            Arc::new(crate::geometry::sphere::Sphere {
-                center: Vec3::new(-2.0, 0.7, -7.0),
-                radius: 0.7,
-                material: Box::new(Metal {
-                    albedo: Vec3::new(0.7, 0.6, 0.5),
-                    fuzz: 0.0,
+            Arc::new(sphere::Sphere {
+                center: Vec3::new(2.0, 5.0, -5.0),
+                radius: 2.0,
+                material: Box::new(DiffuseLight {
+                    albedo: Vec3::new(3.0, 0.3, 0.3),
+                }),
+                // material: Box::new(Dielectric {
+                //     albedo: Vec3::new(1.0, 1.0, 1.0),
+                //     refractive_index: 1.5,
+                // }),
+            }),
+            Arc::new(sphere::Sphere {
+                center: Vec3::new(-2.0, 5.0, -5.0),
+                radius: 2.0,
+                material: Box::new(DiffuseLight {
+                    albedo: Vec3::new(0.05, 3.0, 3.0),
                 }),
             }),
-            Arc::new(crate::geometry::sphere::Sphere {
-                center: Vec3::new(2.0, 0.7, -7.0),
-                radius: 0.7,
-                material: Box::new(Dielectric {
-                    albedo: Vec3::new(1.0, 1.0, 1.0),
-                    refractive_index: 1.5,
-                }),
-            }),
-            Arc::new(crate::geometry::sphere::Sphere {
-                center: Vec3::new(0.0, 0.7, -7.0),
+            Arc::new(sphere::Sphere {
+                center: Vec3::new(0.0, 0.7, -5.0),
                 radius: 0.7,
                 material: Box::new(Lambertian {
-                    albedo: Vec3::new(0.1, 0.1, 0.9),
+                    albedo: Vec3::new(0.2, 0.5, 0.5),
                 }),
             }),
-            Arc::new(crate::geometry::sphere::Sphere {
+            // Arc::new(geometry::mesh::MeshBVH::build_cube(
+            //         Vec3::new(0.0, 0.7, -7.0),
+            //         0.5,
+
+            //     )),
+            Arc::new(sphere::Sphere {
                 center: Vec3::new(0.0, -1000.0, 0.0),
                 radius: 1000.0,
                 material: Box::new(Checkerboard {
@@ -77,9 +76,7 @@ impl WasmRenderer {
                 }),
             }),
         ];
-        WasmRenderer {
-            scene: BVHNode::of_objects_and_endpoints(&mut objects),
-        }
+        WasmRenderer { scene: objects }
     }
 
     pub fn render(

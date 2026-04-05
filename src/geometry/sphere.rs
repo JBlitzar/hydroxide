@@ -35,6 +35,7 @@ impl Hittable for Sphere {
             let normal = (point.sub(&self.center)).normalize();
             Some(HitRecord {
                 point,
+                geo_normal: normal,
                 normal,
                 material: self.material.as_ref(),
                 t,

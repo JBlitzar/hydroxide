@@ -25,9 +25,10 @@ impl Hittable for HittableList {
         let mut closest_hit: Option<HitRecord> = None;
         for obj in &self.objs {
             if let Some(hit) = obj.hit(ray, t_max)
-                && (closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t) {
-                    closest_hit = Some(hit);
-                }
+                && (closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t)
+            {
+                closest_hit = Some(hit);
+            }
         }
         closest_hit
     }
@@ -66,9 +67,10 @@ impl HittableList {
         let mut closest_hit: Option<HitRecord> = None;
         for obj in &self.objs {
             if let Some(hit) = obj.hit(ray, f64::INFINITY)
-                && (closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t) {
-                    closest_hit = Some(hit);
-                }
+                && (closest_hit.is_none() || hit.t < closest_hit.as_ref().unwrap().t)
+            {
+                closest_hit = Some(hit);
+            }
         }
         closest_hit
     }

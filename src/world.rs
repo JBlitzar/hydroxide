@@ -1,7 +1,6 @@
 use std::f64::consts::PI;
-use std::hash::Hash;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::bvh::BVHNode;
 use crate::camera::Camera;
@@ -11,12 +10,27 @@ use crate::material::Dielectric;
 use crate::material::Lambertian;
 use crate::material::Material;
 use crate::material::Metal;
-use crate::vec3::Ray;
+use crate::sky::{GradientSky, Sky};
 use crate::vec3::Vec3;
+use crate::vec3::{Ray, random_unit_vector};
 use rayon::prelude::*;
 
 #[cfg(feature = "native")]
 use indicatif::{ProgressBar, ProgressStyle};
+
+
+fn aces_tonemap(color: &Vec3) -> Vec3 {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    Vec3::new(
+        (color.x * (a * color.x + b) / (color.x * (c * color.x + d) + e)).clamp(0.0, 1.0),
+        (color.y * (a * color.y + b) / (color.y * (c * color.y + d) + e)).clamp(0.0, 1.0),
+        (color.z * (a * color.z + b) / (color.z * (c * color.z + d) + e)).clamp(0.0, 1.0),
+    )
+}
 
 pub struct World {
     camera: Camera,
@@ -25,6 +39,7 @@ pub struct World {
     termination_prob: f64,
     samples: usize,
     lights: Vec<SphereLight>,
+    sky: Box<dyn Sky>,
 }
 impl World {
     pub fn new(
@@ -32,15 +47,25 @@ impl World {
         objects: Vec<Arc<dyn Hittable>>,
         samples: Option<usize>,
         termination_prob: Option<f64>,
+        sky: Option<Box<dyn Sky>>,
     ) -> Self {
         let img_buffer = vec![0; camera.width_px * camera.height_px * 3];
+        let extra_lights = sky.as_ref().map_or_else(Vec::new, |s| s.lights());
+        let mut all_lights = SphereLight::of_mixed_objects(objects.clone());
+        all_lights.extend(extra_lights);
         World {
             camera,
             img_buffer,
             objects: BVHNode::of_objects_and_endpoints(&mut objects.clone()),
             termination_prob: termination_prob.unwrap_or(0.01),
             samples: samples.unwrap_or(20),
-            lights: SphereLight::of_mixed_objects(objects.clone()),
+            lights: all_lights,
+            sky: sky.unwrap_or_else(|| {
+                Box::new(GradientSky {
+                    top_color: Vec3::new(0.87, 0.92, 1.0),
+                    bottom_color: Vec3::new(1.0, 1.0, 1.0),
+                })
+            }),
         }
     }
     pub fn new_random_spheres(camera: Camera, num_spheres: usize) -> Self {
@@ -91,8 +116,7 @@ impl World {
             material: ground_material,
         }));
 
-
-        World::new(camera, objects_vec, None, None)
+        World::new(camera, objects_vec, None, None, None)
     }
 
     pub fn render(&mut self) {
@@ -108,7 +132,7 @@ impl World {
                     "{wide_bar} {pos}/{len} ({eta}) | ({elapsed} elapsed)",
                 )
                 .expect("invalid progress bar template")
-                .progress_chars("=>-"),
+                .progress_chars("#987654321-"),
             );
             pb.enable_steady_tick(std::time::Duration::from_millis(100));
             let counter = AtomicU64::new(0);
@@ -119,12 +143,11 @@ impl World {
                 .for_each(|(y, row)| {
                     for x in 0..width {
                         row[x] = self.cast_rays_and_average(x, y, self.samples);
-                        let prev = counter.fetch_add(1, Ordering::Relaxed);
-                        if prev.is_multiple_of(width as u64) {
-                            pb.set_position(prev + 1);
-                        }
                     }
+                    let prev = counter.fetch_add(width as u64, Ordering::Relaxed);
+                    pb.set_position(prev + width as u64);
                 });
+
             pb.finish_and_clear();
             out
         };
@@ -132,11 +155,14 @@ impl World {
         #[cfg(not(feature = "native"))]
         let pixels: Vec<[u8; 3]> = {
             let mut out = vec![[0u8; 3]; total];
-            out.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
-                for x in 0..width {
-                    row[x] = self.cast_rays_and_average(x, y, self.samples);
-                }
-            });
+            out.par_chunks_mut(width)
+                .enumerate()
+                .with_min_len(1)
+                .for_each(|(y, row)| {
+                    for x in 0..width {
+                        row[x] = self.cast_rays_and_average(x, y, self.samples);
+                    }
+                });
             out
         };
 
@@ -159,12 +185,24 @@ impl World {
     pub fn cast_rays_and_average(&self, x: usize, y: usize, samples: usize) -> [u8; 3] {
         let mut color_accumulator = Vec3::new(0.0, 0.0, 0.0);
         for _ in 0..samples {
-            color_accumulator = color_accumulator.add(&self.cast_ray(x, y));
+            let sample = self.cast_ray(x, y);
+            if sample.x.is_finite() && sample.y.is_finite() && sample.z.is_finite()
+                && sample.x >= 0.0 && sample.y >= 0.0 && sample.z >= 0.0
+            {
+                color_accumulator = color_accumulator.add(&sample);
+            }
         }
+        let avg = Vec3::new(
+            color_accumulator.x / samples as f64,
+            color_accumulator.y / samples as f64,
+            color_accumulator.z / samples as f64,
+        );
+        // ACES filmic tone mapping then gamma 2.2
+        let mapped = aces_tonemap(&avg);
         [
-            ((color_accumulator.x / samples as f64).sqrt() * 255.0).clamp(0.0, 255.0) as u8,
-            ((color_accumulator.y / samples as f64).sqrt() * 255.0).clamp(0.0, 255.0) as u8,
-            ((color_accumulator.z / samples as f64).sqrt() * 255.0).clamp(0.0, 255.0) as u8,
+            (mapped.x.powf(1.0 / 2.2) * 255.0).clamp(0.0, 255.0) as u8,
+            (mapped.y.powf(1.0 / 2.2) * 255.0).clamp(0.0, 255.0) as u8,
+            (mapped.z.powf(1.0 / 2.2) * 255.0).clamp(0.0, 255.0) as u8,
         ]
     }
 
@@ -174,8 +212,8 @@ impl World {
         let mut L = Vec3::ZERO;
         let mut current_ray = self.camera.get_ray_direction(x, y);
         let max_depth: u32 = 100;
-        let sky_color_top = Vec3::new(9.0 / 255.0, 19.0 / 255.0, 84.0 / 255.0);
-        let sky_color_bottom = Vec3::new(27.0 / 255.0, 11.0 / 255.0, 150.0 / 255.0);
+        let _sky_color_top = Vec3::new(9.0 / 255.0, 19.0 / 255.0, 84.0 / 255.0);
+        let _sky_color_bottom = Vec3::new(27.0 / 255.0, 11.0 / 255.0, 150.0 / 255.0);
 
         let mut prev_bounce_was_specular = true;
 
@@ -189,7 +227,7 @@ impl World {
 
                 if let Some(f_diffuse) = hit.material.eval_diffuse_brdf(&current_ray, &hit) {
                     let direct =
-                        self.estimate_direct_sphere_lights(&hit.point, &hit.normal, &f_diffuse);
+                        self.estimate_direct_sphere_lights(&hit.point, &hit.normal, &hit.geo_normal, &f_diffuse);
                     L = L.add(&beta.mul(&direct));
                     prev_bounce_was_specular = false;
                 } else {
@@ -198,15 +236,14 @@ impl World {
                 if let Some((scattered, attenuation)) = hit.material.scatter(&current_ray, &hit) {
                     current_ray = scattered;
                     beta = beta.mul(&attenuation);
+                    if beta.max_component() < 1e-4 {
+                        break;
+                    }
                 } else {
                     break;
                 }
             } else {
-                let unit_dir = current_ray.direction.normalize();
-                let t = 0.5 * (unit_dir.y + 1.0);
-                let sky = sky_color_bottom
-                    .scalar_mul(1.0 - t)
-                    .add(&sky_color_top.scalar_mul(t));
+                let sky = self.sky.color(&current_ray);
                 // return current_color.mul(&sky);
                 L = L.add(&beta.mul(&sky));
                 break;
@@ -262,13 +299,7 @@ impl World {
         img.save(filename).expect("failed to save PNG image");
     }
 
-    fn random_unit_vector() -> Vec3 {
-        let z = 1.0 - 2.0 * fastrand::f64();
-        let r = (1.0 - z * z).max(0.0).sqrt();
-        let phi = 2.0 * PI * fastrand::f64();
-        Vec3::new(r * phi.cos(), r * phi.sin(), z)
-    }
-    fn estimate_direct_sphere_lights(&self, x: &Vec3, n: &Vec3, f_diffuse: &Vec3) -> Vec3 {
+    fn estimate_direct_sphere_lights(&self, x: &Vec3, n: &Vec3, geo_n: &Vec3, f_diffuse: &Vec3) -> Vec3 {
         // I honestly just asked AI to generate this function
         let n_lights = self.lights.len();
         if n_lights == 0 {
@@ -279,7 +310,7 @@ impl World {
         let light = &self.lights[light_idx];
         let p_sel = 1.0 / (n_lights as f64);
 
-        let u = World::random_unit_vector();
+        let u = random_unit_vector();
         let y = light.center.add(&u.scalar_mul(light.radius));
         let n_y = u; // normal on sphere
 
@@ -302,13 +333,12 @@ impl World {
         }
 
         let eps = 1e-3;
-        let origin = x.add(&n.scalar_mul(eps));
+        let origin = x.add(&geo_n.scalar_mul(eps));
         let shadow_ray = Ray::new(origin, wi);
         let t_max = (dist - eps).max(0.0);
-        if t_max > 0.0
-            && self.objects.hit(&shadow_ray, t_max).is_some() {
-                return Vec3::ZERO;
-            }
+        if t_max > 0.0 && self.objects.hit(&shadow_ray, t_max).is_some() {
+            return Vec3::ZERO;
+        }
 
         let pdf_area = 1.0 / (4.0 * PI * light.radius * light.radius);
         let pdf_omega = pdf_area * dist2 / cos_light;

@@ -1,4 +1,4 @@
-use std::ops::Index;
+use std::{f64::consts::PI, ops::Index};
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct Vec3 {
@@ -7,8 +7,29 @@ pub struct Vec3 {
     pub(crate) z: f64,
 }
 
-pub fn toRadians(degrees: f64) -> f64 {
-    degrees * std::f64::consts::PI / 180.0
+pub fn to_radians(degrees: f64) -> f64 {
+    degrees * PI / 180.0
+}
+pub fn random_unit_vector() -> Vec3 {
+    let z = 1.0 - 2.0 * fastrand::f64();
+    let r = (1.0 - z * z).max(0.0).sqrt();
+    let phi = 2.0 * PI * fastrand::f64();
+    Vec3::new(r * phi.cos(), r * phi.sin(), z)
+}
+pub fn random_in_unit_sphere() -> Vec3 {
+    // better way, because it's rejection sampling
+    let mut p;
+    loop {
+        p = Vec3::new(
+            fastrand::f64() * 2.0 - 1.0,
+            fastrand::f64() * 2.0 - 1.0,
+            fastrand::f64() * 2.0 - 1.0,
+        );
+        if p.length_squared() < 1.0 {
+            break;
+        }
+    }
+    p
 }
 
 impl Index<usize> for Vec3 {

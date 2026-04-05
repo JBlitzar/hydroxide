@@ -14,7 +14,7 @@ impl Hittable for Plane {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    
+
     fn hit(&'_ self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>> {
         let denom = self.normal.dot(&ray.direction);
         if denom.abs() > 1e-6 {
@@ -23,6 +23,7 @@ impl Hittable for Plane {
                 let hit_point = ray.origin.add(&ray.direction.scalar_mul(t));
                 return Some(HitRecord {
                     point: hit_point,
+                    geo_normal: self.normal,
                     normal: self.normal,
                     material: self.material.as_ref(),
                     t,
