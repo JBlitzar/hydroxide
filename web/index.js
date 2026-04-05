@@ -587,6 +587,7 @@ function loadObjectToPanel(index) {
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  if (selectedIndex >= 0) safeComputeOutline();
   fullRerender();
 }
 window.addEventListener("resize", resize);
