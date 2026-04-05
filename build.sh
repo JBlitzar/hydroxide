@@ -10,6 +10,17 @@ RUSTFLAGS='-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C 
 wasm-bindgen --target web --out-dir web/pkg \
   target/wasm32-unknown-unknown/release/oxide.wasm
 
+wasm-opt -O3 \
+  --enable-simd \
+  --enable-threads \
+  --enable-bulk-memory \
+  --enable-bulk-memory-opt \
+  --enable-nontrapping-float-to-int \
+  --strip-debug \
+  --strip-producers \
+  -o web/pkg/oxide_bg.wasm \
+  web/pkg/oxide_bg.wasm
+
 
 cat > web/pkg/index.js << 'EOF'
 export * from './oxide.js';

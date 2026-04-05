@@ -3,14 +3,14 @@ use crate::vec3::{Ray, Vec3};
 pub struct Camera {
     pub(crate) width_px: usize,
     pub(crate) height_px: usize,
-    position: Vec3,
-    forward: Vec3,
-    right: Vec3,
-    up: Vec3,
-    half_tan_fov_x: f64,
-    half_tan_fov_y: f64,
-    focus_distance: f64,
-    aperture: f64,
+    pub(crate) position: Vec3,
+    pub(crate) forward: Vec3,
+    pub(crate) right: Vec3,
+    pub(crate) up: Vec3,
+    pub(crate) half_tan_fov_x: f64,
+    pub(crate) half_tan_fov_y: f64,
+    pub(crate) focus_distance: f64,
+    pub(crate) aperture: f64,
 }
 impl Camera {
     pub fn look_at(
@@ -62,6 +62,24 @@ impl Camera {
             .add(&self.up.scalar_mul(lens_offset.y));
         let new_dir = focus_point.sub(&origin).normalize();
         Ray::new(origin, new_dir)
+    }
+    pub fn project_point(&self, p: Vec3) -> Option<(f64, f64)> {
+        let v = p.sub(&self.position);
+        let x = v.dot(&self.right);
+        let y = v.dot(&self.up);
+        let z = v.dot(&self.forward);
+
+        if z <= 1e-6 {
+            return None;
+        }
+
+        let x_ndc = x / (z * self.half_tan_fov_x);
+        let y_ndc = y / (z * self.half_tan_fov_y);
+
+        let u = 0.5 * (x_ndc + 1.0);
+        let vv = 0.5 * (1.0 - y_ndc);
+
+        Some((u * self.width_px as f64, vv * self.height_px as f64))
     }
 }
 

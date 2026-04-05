@@ -15,7 +15,6 @@ use crate::material::Checkerboard;
 
 use crate::material::Dielectric;
 
-
 use crate::camera::Camera;
 use crate::geometry::mesh::MeshBVH;
 use crate::material::Lambertian;

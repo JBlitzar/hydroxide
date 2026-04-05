@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     geometry::{Hittable, sphere::Sphere},
-    material::{DiffuseLight, Material},
+    material::DiffuseLight,
     vec3::Vec3,
 };
 

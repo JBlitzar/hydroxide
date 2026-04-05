@@ -66,7 +66,9 @@ impl Material for Lambertian {
     }
     fn scatter(&self, _ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
         let dir = cosine_weighted_hemisphere(&hit_record.normal);
-        let origin = hit_record.point.add(&hit_record.geo_normal.scalar_mul(1e-3));
+        let origin = hit_record
+            .point
+            .add(&hit_record.geo_normal.scalar_mul(1e-3));
         Some((Ray::new(origin, dir), self.albedo))
     }
     fn eval_diffuse_brdf(&self, _ray_in: &Ray, _hit_record: &HitRecord) -> Option<Vec3> {
@@ -85,7 +87,9 @@ impl Material for Metal {
     fn scatter(&self, ray_in: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vec3)> {
         let reflected_dir = reflect(&ray_in.direction, &hit_record.normal);
         let fuzz = random_in_unit_sphere().scalar_mul(self.fuzz);
-        let origin = hit_record.point.add(&hit_record.geo_normal.scalar_mul(1e-3));
+        let origin = hit_record
+            .point
+            .add(&hit_record.geo_normal.scalar_mul(1e-3));
         Some((Ray::new(origin, reflected_dir.add(&fuzz)), self.albedo))
     }
 }
@@ -140,10 +144,14 @@ impl Material for Dielectric {
         let (direction, origin);
         if cannot_refract || Dielectric::reflectance(cos_theta, ri) > fastrand::f64() {
             direction = reflect(&unit_direction, &hit_record.normal);
-            origin = hit_record.point.add(&hit_record.geo_normal.scalar_mul(1e-3));
+            origin = hit_record
+                .point
+                .add(&hit_record.geo_normal.scalar_mul(1e-3));
         } else {
             direction = refract(&unit_direction, &hit_record.normal, ri);
-            origin = hit_record.point.add(&hit_record.geo_normal.scalar_mul(-1e-3));
+            origin = hit_record
+                .point
+                .add(&hit_record.geo_normal.scalar_mul(-1e-3));
         }
 
         let scattered = Ray::new(origin, direction);

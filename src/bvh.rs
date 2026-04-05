@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    camera::Camera,
     geometry::{Hittable, HittableList},
     material::HitRecord,
     vec3::{Ray, Vec3},
@@ -66,6 +67,42 @@ impl AABB {
         }
         true
     }
+
+    pub fn screen_space_aabb(&self, camera: &Camera) -> (usize, usize, usize, usize) {
+        let corners = [
+            Vec3::new(self.min.x, self.min.y, self.min.z),
+            Vec3::new(self.min.x, self.min.y, self.max.z),
+            Vec3::new(self.min.x, self.max.y, self.min.z),
+            Vec3::new(self.min.x, self.max.y, self.max.z),
+            Vec3::new(self.max.x, self.min.y, self.min.z),
+            Vec3::new(self.max.x, self.min.y, self.max.z),
+            Vec3::new(self.max.x, self.max.y, self.min.z),
+            Vec3::new(self.max.x, self.max.y, self.max.z),
+        ];
+
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+
+        for corner in &corners {
+            if let Some((u, v)) = camera.project_point(*corner) {
+                min_x = min_x.min(u);
+                max_x = max_x.max(u);
+                min_y = min_y.min(v);
+                max_y = max_y.max(v);
+            } else {
+                return (0, camera.width_px, 0, camera.height_px);
+            }
+        }
+
+        (
+            min_x.max(0.0).min(camera.width_px as f64 - 1.0) as usize,
+            max_x.max(0.0).min(camera.width_px as f64 - 1.0) as usize,
+            min_y.max(0.0).min(camera.height_px as f64 - 1.0) as usize,
+            max_y.max(0.0).min(camera.height_px as f64 - 1.0) as usize,
+        )
+    }
 }
 
 // https://raytracing.github.io/books/RayTracingTheNextWeek.html#boundingvolumehierarchies
@@ -101,6 +138,62 @@ impl BVHNode {
             (None, None) => None,
         }
     }
+
+    fn pick_child(obj: &Arc<dyn Hittable>, ray: &Ray, t_max: f64) -> Option<PickHit> {
+        if obj.is_leaf() {
+            return obj.hit(ray, t_max).map(|h| PickHit {
+                point: h.point,
+                normal: h.normal,
+                geo_normal: h.geo_normal,
+                t: h.t,
+                object: Arc::clone(obj),
+            });
+        }
+
+        obj.as_any()
+            .downcast_ref::<BVHNode>()
+            .and_then(|node| node.pick(ray, t_max))
+            .or_else(|| {
+                obj.hit(ray, t_max).map(|h| PickHit {
+                    point: h.point,
+                    normal: h.normal,
+                    geo_normal: h.geo_normal,
+                    t: h.t,
+                    object: Arc::clone(obj),
+                })
+            })
+    }
+
+    pub fn pick(&self, ray: &Ray, t_max: f64) -> Option<PickHit> {
+        if !self.bbox.hit(ray, t_max) {
+            return None;
+        }
+
+        let left_hit = Self::pick_child(&self.left, ray, t_max);
+        let right_t_max = t_max.min(left_hit.as_ref().map_or(f64::INFINITY, |hit| hit.t));
+        let right_hit = Self::pick_child(&self.right, ray, right_t_max);
+
+        match (left_hit, right_hit) {
+            (Some(l), Some(r)) => {
+                if l.t <= r.t {
+                    Some(l)
+                } else {
+                    Some(r)
+                }
+            }
+            (Some(l), None) => Some(l),
+            (None, Some(r)) => Some(r),
+            (None, None) => None,
+        }
+    }
+}
+
+pub struct PickHit {
+    pub point: Vec3,
+    pub normal: Vec3,
+    pub geo_normal: Vec3,
+    pub t: f64,
+    pub object: Arc<dyn Hittable>,
 }
 impl Hittable for BVHNode {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -113,6 +206,10 @@ impl Hittable for BVHNode {
 
     fn bounding_box(&self) -> AABB {
         self.bbox.clone()
+    }
+
+    fn is_leaf(&self) -> bool {
+        false
     }
 }
 impl Default for BVHNode {

@@ -10,6 +10,9 @@ pub trait Hittable: Send + Sync {
 
     fn bounding_box(&self) -> AABB;
     fn as_any(&self) -> &dyn std::any::Any;
+    fn is_leaf(&self) -> bool {
+        true
+    }
 }
 
 pub struct HittableList {

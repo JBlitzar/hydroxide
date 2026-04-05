@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::bvh::BVHNode;
+use crate::bvh::PickHit;
 use crate::camera::Camera;
 use crate::geometry::Hittable;
 use crate::light::SphereLight;
@@ -17,7 +18,6 @@ use rayon::prelude::*;
 
 #[cfg(feature = "native")]
 use indicatif::{ProgressBar, ProgressStyle};
-
 
 fn aces_tonemap(color: &Vec3) -> Vec3 {
     let a = 2.51;
@@ -40,6 +40,7 @@ pub struct World {
     samples: usize,
     lights: Vec<SphereLight>,
     sky: Box<dyn Sky>,
+    selection_mask: Vec<u8>,
 }
 impl World {
     pub fn new(
@@ -49,7 +50,9 @@ impl World {
         termination_prob: Option<f64>,
         sky: Option<Box<dyn Sky>>,
     ) -> Self {
-        let img_buffer = vec![0; camera.width_px * camera.height_px * 3];
+        let width_px = camera.width_px;
+        let height_px = camera.height_px;
+        let img_buffer = vec![0; width_px * height_px * 3];
         let extra_lights = sky.as_ref().map_or_else(Vec::new, |s| s.lights());
         let mut all_lights = SphereLight::of_mixed_objects(objects.clone());
         all_lights.extend(extra_lights);
@@ -66,8 +69,69 @@ impl World {
                     bottom_color: Vec3::new(1.0, 1.0, 1.0),
                 })
             }),
+            selection_mask: vec![0; width_px * height_px],
         }
     }
+
+    pub fn pick(&self, x: usize, y: usize) -> Option<PickHit> {
+        self.objects
+            .pick(&self.camera.get_ray_direction(x, y), f64::INFINITY)
+    }
+
+    pub fn outline(&mut self, object: &Arc<dyn Hittable>, radius: usize) -> Vec<u8> {
+        self.mask(object);
+        self.dilate_mask(radius)
+        
+    }
+
+    pub fn mask(&mut self, object: &Arc<dyn Hittable>) {
+        let aabb = object.bounding_box().screen_space_aabb(&self.camera);
+
+        self.selection_mask.fill(0);
+
+        for y in aabb.2..=aabb.3 {
+            for x in aabb.0..=aabb.1 {
+                let idx = y * self.camera.width_px + x;
+                let obj = self.pick(x, y);
+                if let Some(hit) = obj {
+                    if Arc::ptr_eq(&hit.object, object) {
+                        self.selection_mask[idx] = 255;
+                    } else {
+                        self.selection_mask[idx] = 0;
+                    }
+                }
+            }
+        }
+    }
+    pub fn dilate_mask(&self, radius: usize) -> Vec<u8> {
+        let w = self.camera.width_px;
+        let h = self.camera.height_px;
+        let mut outline = vec![0u8; w * h];
+        for y in 0..h {
+            for x in 0..w {
+                if self.selection_mask[y * w + x] != 0 {
+                    continue;
+                }
+                'search: for dy in -(radius as isize)..=(radius as isize) {
+                    for dx in -(radius as isize)..=(radius as isize) {
+                        let nx = x as isize + dx;
+                        let ny = y as isize + dy;
+                        if nx >= 0
+                            && nx < w as isize
+                            && ny >= 0
+                            && ny < h as isize
+                            && self.selection_mask[ny as usize * w + nx as usize] != 0
+                        {
+                            outline[y * w + x] = 255;
+                            break 'search;
+                        }
+                    }
+                }
+            }
+        }
+        outline
+    }
+
     pub fn new_random_spheres(camera: Camera, num_spheres: usize) -> Self {
         let mut objects_vec: Vec<Arc<dyn Hittable>> = Vec::new();
         for _ in 0..num_spheres {
@@ -186,8 +250,12 @@ impl World {
         let mut color_accumulator = Vec3::new(0.0, 0.0, 0.0);
         for _ in 0..samples {
             let sample = self.cast_ray(x, y);
-            if sample.x.is_finite() && sample.y.is_finite() && sample.z.is_finite()
-                && sample.x >= 0.0 && sample.y >= 0.0 && sample.z >= 0.0
+            if sample.x.is_finite()
+                && sample.y.is_finite()
+                && sample.z.is_finite()
+                && sample.x >= 0.0
+                && sample.y >= 0.0
+                && sample.z >= 0.0
             {
                 color_accumulator = color_accumulator.add(&sample);
             }
@@ -226,8 +294,12 @@ impl World {
                 }
 
                 if let Some(f_diffuse) = hit.material.eval_diffuse_brdf(&current_ray, &hit) {
-                    let direct =
-                        self.estimate_direct_sphere_lights(&hit.point, &hit.normal, &hit.geo_normal, &f_diffuse);
+                    let direct = self.estimate_direct_sphere_lights(
+                        &hit.point,
+                        &hit.normal,
+                        &hit.geo_normal,
+                        &f_diffuse,
+                    );
                     L = L.add(&beta.mul(&direct));
                     prev_bounce_was_specular = false;
                 } else {
@@ -299,7 +371,13 @@ impl World {
         img.save(filename).expect("failed to save PNG image");
     }
 
-    fn estimate_direct_sphere_lights(&self, x: &Vec3, n: &Vec3, geo_n: &Vec3, f_diffuse: &Vec3) -> Vec3 {
+    fn estimate_direct_sphere_lights(
+        &self,
+        x: &Vec3,
+        n: &Vec3,
+        geo_n: &Vec3,
+        f_diffuse: &Vec3,
+    ) -> Vec3 {
         // I honestly just asked AI to generate this function
         let n_lights = self.lights.len();
         if n_lights == 0 {

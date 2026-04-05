@@ -1,8 +1,13 @@
-use crate::{light::SphereLight, vec3::{Ray, Vec3}};
+use crate::{
+    light::SphereLight,
+    vec3::{Ray, Vec3},
+};
 use image::ImageReader;
 pub trait Sky: Send + Sync {
     fn color(&self, ray: &Ray) -> Vec3;
-    fn lights(&self) -> Vec<SphereLight> { vec![] }
+    fn lights(&self) -> Vec<SphereLight> {
+        vec![]
+    }
 }
 pub struct GradientSky {
     pub top_color: Vec3,
@@ -56,7 +61,7 @@ impl HDRSky {
             .map(|chunk| Vec3::new(chunk[0] as f64, chunk[1] as f64, chunk[2] as f64))
             .collect::<Vec<_>>()
             .into_iter()
-            .fold(Vec::new(), |mut data , pixel| {
+            .fold(Vec::new(), |mut data, pixel| {
                 data.push(pixel);
                 data
             });
