@@ -42,6 +42,8 @@ pub struct World {
     lights: Vec<SphereLight>,
     sky: Box<dyn Sky>,
     selection_mask: Vec<u8>,
+    sample_chunk_size: usize,
+    max_tolerance: f64,
 }
 impl World {
     pub fn new(
@@ -72,6 +74,8 @@ impl World {
                 })
             }),
             selection_mask: vec![0; width_px * height_px],
+            sample_chunk_size: 32,
+            max_tolerance: 0.05,
         }
     }
 
@@ -199,7 +203,13 @@ impl World {
                 .with_min_len(1)
                 .for_each(|(y, row)| {
                     for x in 0..width {
-                        row[x] = self.cast_rays_and_average(x, y, self.samples);
+                        row[x] = self.cast_rays_and_average(
+                            x,
+                            y,
+                            self.samples,
+                            self.sample_chunk_size,
+                            self.max_tolerance,
+                        );
                     }
                     let prev = counter.fetch_add(width as u64, Ordering::Relaxed);
                     pb.set_position(prev + width as u64);
@@ -217,7 +227,13 @@ impl World {
                 .with_min_len(1)
                 .for_each(|(y, row)| {
                     for x in 0..width {
-                        row[x] = self.cast_rays_and_average(x, y, self.samples);
+                        row[x] = self.cast_rays_and_average(
+                            x,
+                            y,
+                            self.samples,
+                            self.sample_chunk_size,
+                            self.max_tolerance,
+                        );
                     }
                 });
             out
@@ -233,15 +249,33 @@ impl World {
     pub fn render_single_threaded(&mut self) {
         for y in 0..self.camera.height_px {
             for x in 0..self.camera.width_px {
-                let color = self.cast_rays_and_average(x, y, self.samples);
+                let color = self.cast_rays_and_average(
+                    x,
+                    y,
+                    self.samples,
+                    self.sample_chunk_size,
+                    self.max_tolerance,
+                );
                 self.write_pixel(x, y, color);
             }
         }
     }
 
-    pub fn cast_rays_and_average(&self, x: usize, y: usize, samples: usize) -> [u8; 3] {
+    pub fn cast_rays_and_average(
+        &self,
+        x: usize,
+        y: usize,
+        samples: usize,
+        sample_chunk_size: usize,
+        max_tolerance: f64,
+    ) -> [u8; 3] {
+        // https://cs184.eecs.berkeley.edu/sp21/docs/proj3-1-part-5
         let mut color_accumulator = Vec3::new(0.0, 0.0, 0.0);
-        for _ in 0..samples {
+        let mut s1 = 0.0;
+        let mut s2 = 0.0;
+        let mut n_valid: usize = 0;
+
+        for i in 0..samples {
             let sample = self.cast_ray(x, y);
             if sample.x.is_finite()
                 && sample.y.is_finite()
@@ -250,13 +284,37 @@ impl World {
                 && sample.y >= 0.0
                 && sample.z >= 0.0
             {
+                n_valid += 1;
                 color_accumulator = color_accumulator.add(&sample);
+                let illum = 0.2126 * sample.x + 0.7152 * sample.y + 0.0722 * sample.z;
+                s1 += illum;
+                s2 += illum * illum;
+            }
+
+            let used = i + 1;
+            if sample_chunk_size > 0 && used % sample_chunk_size == 0 && n_valid > 1 {
+                let n = n_valid as f64;
+                let mu = s1 / n;
+                let sigma_squared = (s2 - (s1 * s1) / n) / (n - 1.0);
+                if mu > 0.0 && sigma_squared.is_finite() && sigma_squared >= 0.0 {
+                    let ci2 = (1.96 * 1.96) * (sigma_squared / n);
+                    let tol2 = (max_tolerance * mu) * (max_tolerance * mu);
+                    if ci2 < tol2 {
+                        break;
+                    }
+                }
             }
         }
+
+        if n_valid == 0 {
+            return [0, 0, 0];
+        }
+
+        let inv = 1.0 / (n_valid as f64);
         let avg = Vec3::new(
-            color_accumulator.x / samples as f64,
-            color_accumulator.y / samples as f64,
-            color_accumulator.z / samples as f64,
+            color_accumulator.x * inv,
+            color_accumulator.y * inv,
+            color_accumulator.z * inv,
         );
         // ACES filmic tone mapping then gamma 2.2
         let mapped = aces_tonemap(&avg);
