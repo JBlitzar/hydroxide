@@ -20,24 +20,19 @@ function blockUnsupported() {
   if (!blocked) return false;
 
   const gh = "https://github.com/jblitzar/oxide";
-  document.body.innerHTML = "";
-  document.body.style.background = "#000";
-  document.body.style.color = "#fff";
-  document.body.style.overflow = "auto";
-  const wrap = document.createElement("div");
-  wrap.style.maxWidth = "720px";
-  wrap.style.margin = "64px auto";
-  wrap.style.padding = "0 16px";
-  wrap.style.fontFamily = "monospace";
-  wrap.innerHTML = `
-    <h1 style="font-size:18px; margin-bottom:12px;">Unsupported browser</h1>
-    <p style="color:#ccc; line-height:1.5; margin-bottom:12px;">
-      This web demo doesn’t work on mobile or Safari.
-      Please try Chrome or Firefox on desktop.
-    </p>
-    <p><a href="${gh}" target="_blank" rel="noreferrer" style="color:#fff; text-decoration:none;">Visit the GitHub repo</a></p>
-  `;
-  document.body.appendChild(wrap);
+  const info = document.getElementById("info");
+  if (info) {
+    info.innerHTML = `Unsupported on mobile/Safari. Please use Chrome/Firefox on desktop. <a href="${gh}" target="_blank" rel="noreferrer">[Github]</a>`;
+  }
+
+  const hints = document.querySelector(".i2");
+  if (hints) hints.style.display = "none";
+  const sky = document.getElementById("sky-select");
+  if (sky) sky.style.display = "none";
+  const add = document.getElementById("add-object");
+  if (add) add.style.display = "none";
+  const panel = document.getElementById("panel");
+  if (panel) panel.style.display = "none";
   return true;
 }
 
