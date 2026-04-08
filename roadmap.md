@@ -2,7 +2,6 @@
 
 Housekeeping:
 
-- Split world.rs
 - Split wasm.rs
 
 dynamic preview?? benchmark users at runtime
