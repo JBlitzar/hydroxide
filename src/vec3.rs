@@ -1,6 +1,7 @@
 use std::{f64::consts::PI, ops::Index};
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct Vec3 {
     pub(crate) x: f64,
     pub(crate) y: f64,

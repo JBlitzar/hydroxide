@@ -4,7 +4,7 @@ use crate::{material::HitRecord, vec3::Ray};
 pub mod mesh;
 pub mod plane;
 pub mod sphere;
-mod triangle;
+pub mod triangle;
 
 pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>>;

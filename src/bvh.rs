@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use crate::{
+    aabb::AABB,
     camera::Camera,
     geometry::{Hittable, HittableList},
     material::HitRecord,
     vec3::{Ray, Vec3},
-    aabb::AABB,
 };
-
 
 // https://raytracing.github.io/books/RayTracingTheNextWeek.html#boundingvolumehierarchies
 #[derive(Clone)]

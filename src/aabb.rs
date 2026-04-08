@@ -1,5 +1,7 @@
-use crate::{camera::Camera, vec3::{Ray, Vec3}};
-
+use crate::{
+    camera::Camera,
+    vec3::{Ray, Vec3},
+};
 
 // erm actually they're called axis-aligned bounding rectangular parallelepipeds
 #[derive(Clone)]

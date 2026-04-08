@@ -27,7 +27,7 @@ impl MeshBVH {
         Self::new(self.triangles.clone(), material)
     }
 
-    fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {
+    pub fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {
         let mut bvh = MeshBVH {
             nodes: Vec::new(),
             triangles,

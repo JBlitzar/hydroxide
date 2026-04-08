@@ -2,7 +2,8 @@ use crate::{
     bluenoise::get_pixel_sample,
     vec3::{Ray, Vec3},
 };
-
+use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Camera {
     pub(crate) width_px: usize,
     pub(crate) height_px: usize,

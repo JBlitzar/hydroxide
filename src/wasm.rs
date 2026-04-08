@@ -4,9 +4,9 @@ use crate::geometry::mesh::MeshBVH;
 use crate::geometry::*;
 use crate::material::DiffuseLight;
 use crate::material::{Checkerboard, Dielectric, Lambertian, Material, Metal};
+use crate::renderer::Renderer;
 use crate::sky::{GradientSky, HDRSky, Sky, SolidColorSky};
 use crate::vec3::Vec3;
-use crate::renderer::Renderer;
 use crate::world::World;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
@@ -205,11 +205,7 @@ impl WasmRenderer {
             focus_distance,
             0.0,
         );
-        let world = World::new(
-            camera,
-            self.scene.clone(),
-            Some(self.build_sky()),
-        );
+        let world = World::new(camera, self.scene.clone(), Some(self.build_sky()));
         match world.pick_index(pixel_x as usize, pixel_y as usize) {
             Some(i) if i < self.kinds.len() && self.kinds[i] != ObjectKind::Ground => i as i32,
             _ => -1,
@@ -239,11 +235,7 @@ impl WasmRenderer {
             1.0,
             0.0,
         );
-        let world = World::new(
-            camera,
-            self.scene.clone(),
-            Some(self.build_sky()),
-        );
+        let world = World::new(camera, self.scene.clone(), Some(self.build_sky()));
         world
             .pick(pixel_x as usize, pixel_y as usize)
             .map(|h| h.t)
@@ -279,11 +271,7 @@ impl WasmRenderer {
             focus_distance,
             0.0,
         );
-        let mut world = World::new(
-            camera,
-            self.scene.clone(),
-            Some(self.build_sky()),
-        );
+        let mut world = World::new(camera, self.scene.clone(), Some(self.build_sky()));
         let obj = world.scene_object(idx).cloned();
         match obj {
             Some(o) => world.outline(&o, radius as usize),
@@ -478,11 +466,7 @@ impl WasmRenderer {
             focus_distance,
             aperture,
         );
-        let world = World::new(
-            camera,
-            self.scene.clone(),
-            Some(self.build_sky()),
-        );
+        let world = World::new(camera, self.scene.clone(), Some(self.build_sky()));
         let mut renderer = Renderer::new(
             width as usize,
             height as usize,

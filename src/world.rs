@@ -22,11 +22,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(
-        camera: Camera,
-        objects: Vec<Arc<dyn Hittable>>,
-        sky: Option<Box<dyn Sky>>,
-    ) -> Self {
+    pub fn new(camera: Camera, objects: Vec<Arc<dyn Hittable>>, sky: Option<Box<dyn Sky>>) -> Self {
         let width_px = camera.width_px;
         let height_px = camera.height_px;
         let extra_lights = sky.as_ref().map_or_else(Vec::new, |s| s.lights());

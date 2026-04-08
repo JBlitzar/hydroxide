@@ -1,7 +1,10 @@
-use crate::{material::{HitRecord, Material}, vec3::{Ray, Vec3}};
+use crate::{
+    material::{HitRecord, Material},
+    vec3::{Ray, Vec3},
+};
 
-
-#[derive(Clone)]
+use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Triangle {
     pub(crate) v0: Vec3,
     pub(crate) v1: Vec3,

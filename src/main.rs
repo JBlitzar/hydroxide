@@ -1,14 +1,15 @@
+mod aabb;
 mod bluenoise;
 mod bvh;
 mod camera;
 mod geometry;
 mod light;
 mod material;
+mod renderer;
+mod scene;
 mod sky;
 mod vec3;
-mod renderer;
 mod world;
-mod aabb;
 
 use std::sync::Arc;
 
@@ -21,8 +22,8 @@ use crate::material::Dielectric;
 use crate::camera::Camera;
 use crate::geometry::mesh::MeshBVH;
 use crate::material::Lambertian;
-use crate::vec3::Vec3;
 use crate::renderer::Renderer;
+use crate::vec3::Vec3;
 use crate::world::World;
 
 fn main() {

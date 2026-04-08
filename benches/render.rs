@@ -6,8 +6,8 @@ use oxide::camera::Camera;
 use oxide::geometry::Hittable;
 use oxide::geometry::mesh::MeshBVH;
 use oxide::material::Lambertian;
-use oxide::vec3::Vec3;
 use oxide::renderer::Renderer;
+use oxide::vec3::Vec3;
 use oxide::world::World;
 
 fn bench_render(c: &mut Criterion) {

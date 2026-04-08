@@ -113,12 +113,7 @@ impl Renderer {
         }
     }
 
-    pub fn cast_rays_and_average(
-        &self,
-        world: &World,
-        x: usize,
-        y: usize,
-    ) -> [u8; 3] {
+    pub fn cast_rays_and_average(&self, world: &World, x: usize, y: usize) -> [u8; 3] {
         let mut color_accumulator = Vec3::new(0.0, 0.0, 0.0);
         let mut s1 = 0.0;
         let mut s2 = 0.0;
