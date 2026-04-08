@@ -7,6 +7,7 @@ mod material;
 mod sky;
 mod vec3;
 mod world;
+mod aabb;
 
 use std::sync::Arc;
 

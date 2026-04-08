@@ -13,7 +13,7 @@ use crate::material::Material;
 use crate::material::Metal;
 use crate::sky::{GradientSky, Sky};
 use crate::vec3::Vec3;
-use crate::vec3::{Ray, random_unit_vector};
+use crate::vec3::{Ray, random_hemisphere, random_unit_vector};
 use rayon::prelude::*;
 
 #[cfg(feature = "native")]
@@ -439,9 +439,10 @@ impl World {
         let light = &self.lights[light_idx];
         let p_sel = 1.0 / (n_lights as f64);
 
-        let u = random_unit_vector();
+        let toward_x = x.sub(&light.center).normalize();
+        let u = random_hemisphere(&toward_x);
         let y = light.center.add(&u.scalar_mul(light.radius));
-        let n_y = u; // normal on sphere
+        let n_y = u;
 
         let d = y.sub(x);
         let dist2 = d.length_squared();
@@ -469,7 +470,7 @@ impl World {
             return Vec3::ZERO;
         }
 
-        let pdf_area = 1.0 / (4.0 * PI * light.radius * light.radius);
+        let pdf_area = 1.0 / (2.0 * PI * light.radius * light.radius);
         let pdf_omega = pdf_area * dist2 / cos_light;
         let pdf = p_sel * pdf_omega;
         if pdf <= 1e-20 {

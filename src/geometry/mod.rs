@@ -1,4 +1,4 @@
-use crate::bvh::AABB;
+use crate::aabb::AABB;
 use crate::vec3::Vec3;
 use crate::{material::HitRecord, vec3::Ray};
 pub mod mesh;

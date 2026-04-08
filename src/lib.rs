@@ -7,6 +7,7 @@ pub mod material;
 pub mod sky;
 pub mod vec3;
 pub mod world;
+pub mod aabb;
 
 #[cfg(feature = "wasm")]
 pub mod wasm;

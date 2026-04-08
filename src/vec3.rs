@@ -16,6 +16,24 @@ pub fn random_unit_vector() -> Vec3 {
     let phi = 2.0 * PI * fastrand::f64();
     Vec3::new(r * phi.cos(), r * phi.sin(), z)
 }
+pub fn random_hemisphere(dir: &Vec3) -> Vec3 {
+    let w = dir.normalize();
+    let a = if w.x.abs() > 0.9 {
+        Vec3::new(0.0, 1.0, 0.0)
+    } else {
+        Vec3::new(1.0, 0.0, 0.0)
+    };
+    let v = w.cross(&a).normalize();
+    let u = w.cross(&v);
+
+    let z = fastrand::f64();
+    let r = (1.0 - z * z).max(0.0).sqrt();
+    let phi = 2.0 * PI * fastrand::f64();
+    u.scalar_mul(r * phi.cos())
+        .add(&v.scalar_mul(r * phi.sin()))
+        .add(&w.scalar_mul(z))
+}
+
 pub fn random_in_unit_sphere() -> Vec3 {
     // better way, because it's rejection sampling
     let mut p;
