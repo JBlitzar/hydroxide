@@ -1,6 +1,6 @@
 [package]
 name = "hydroxide"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 description = "CPU path tracer written in Rust"
 license = "GPL-3.0-only"
@@ -58,8 +58,8 @@ required-features = ["native"]
 
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 2
 panic = "abort"
 strip = true
 overflow-checks = false
