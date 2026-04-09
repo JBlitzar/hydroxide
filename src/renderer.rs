@@ -102,6 +102,8 @@ impl Renderer {
             let y = i / width;
             self.write_pixel(x, y, *pixel);
         }
+
+        self.despeckle();
     }
 
     pub fn render_single_threaded(&mut self, world: &World) {
@@ -320,5 +322,52 @@ impl Renderer {
         }
 
         f_diffuse.mul(&light.Le).scalar_mul(cos_surf / pdf)
+    }
+
+    fn despeckle(&mut self) {
+        for x in 1..self.height - 1 {
+            for y in 1..self.width - 1 {
+                let idx = (x * self.width + y) * 3;
+                let current: f64 = self.img_buffer[idx] as f64 / 3.0
+                    + self.img_buffer[idx + 1] as f64 / 3.0
+                    + self.img_buffer[idx + 2] as f64 / 3.0;
+
+                let mut avg_neighbor: Vec3 = Vec3::ZERO;
+                let mut min_neighbor_brightness = f64::INFINITY;
+                let mut max_neighbor_brightness = f64::NEG_INFINITY;
+                for dx in -1..=1 {
+                    for dy in -1..=1 {
+                        if dx == 0 && dy == 0 {
+                            continue;
+                        }
+                        let neighbor_idx = ((x as isize + dx) as usize * self.width
+                            + (y as isize + dy) as usize)
+                            * 3;
+                        let neighbor: f64 = self.img_buffer[neighbor_idx] as f64 / 3.0
+                            + self.img_buffer[neighbor_idx + 1] as f64 / 3.0
+                            + self.img_buffer[neighbor_idx + 2] as f64 / 3.0;
+
+                        avg_neighbor = avg_neighbor.add(&Vec3::new(
+                            self.img_buffer[neighbor_idx] as f64,
+                            self.img_buffer[neighbor_idx + 1] as f64,
+                            self.img_buffer[neighbor_idx + 2] as f64,
+                        ));
+                        if neighbor < min_neighbor_brightness {
+                            min_neighbor_brightness = neighbor;
+                        }
+                        if neighbor > max_neighbor_brightness {
+                            max_neighbor_brightness = neighbor;
+                        }
+                    }
+                }
+                avg_neighbor = avg_neighbor.scalar_mul(1.0 / 8.0);
+
+                if current < min_neighbor_brightness * 0.8 || current > max_neighbor_brightness * 1.2 {
+                    self.img_buffer[idx] = avg_neighbor.x as u8;
+                    self.img_buffer[idx + 1] = avg_neighbor.y as u8;
+                    self.img_buffer[idx + 2] = avg_neighbor.z as u8;
+                }
+            }
+        }
     }
 }
