@@ -42,6 +42,9 @@ struct Args {
 fn main() {
     fastrand::seed(42);
     let args = Args::parse();
+    if std::env::args_os().len() <= 1 {
+        println!("Hint: run with --help to see available options.");
+    }
 
     let profile = env!("HYDROXIDE_PROFILE");
     let (width, height, samples, roulette) = match profile {
@@ -143,6 +146,8 @@ fn main() {
     renderer.save_image(&args.output);
     println!("Image hash: {:x}", renderer.hash_buf());
     scene.save(&args.scene);
+    println!("Scene saved to {}", args.scene);
+    println!("Image saved to {}", args.output);
 }
 
 #[cfg(test)]
