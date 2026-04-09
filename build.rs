@@ -11,5 +11,5 @@ fn main() {
         "debug"
     };
 
-    println!("cargo:rustc-env=OXIDE_PROFILE={effective_profile}");
+    println!("cargo:rustc-env=HYDROXIDE_PROFILE={effective_profile}");
 }

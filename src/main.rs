@@ -23,7 +23,7 @@ struct Args {
     #[arg(short, long, default_value = "output.png")]
     output: String,
 
-    #[arg(short, long, default_value = "demo.scene")]
+    #[arg(long, default_value = "demo.scene")]
     scene: String,
 
     #[arg(short, long, default_value = "500")]
@@ -32,10 +32,10 @@ struct Args {
     #[arg(short, long, default_value = "0.1")]
     roulette: f64,
 
-    #[arg(short, long, default_value = "1920")]
+    #[arg(long, default_value = "1920")]
     width: u32,
 
-    #[arg(short, long, default_value = "1080")]
+    #[arg(long, default_value = "1080")]
     height: u32,
 }
 
@@ -43,9 +43,9 @@ fn main() {
     fastrand::seed(42);
     let args = Args::parse();
 
-    let profile = env!("OXIDE_PROFILE");
+    let profile = env!("HYDROXIDE_PROFILE");
     let (width, height, samples, roulette) = match profile {
-        "iteration" => (960, 540, 100, 0.1),
+        "iteration" => (1920, 1080, 100, 0.1),
         "extra" => (3840, 2160, 1_000, 0.05),
         _ => (args.width, args.height, args.samples, args.roulette),
     };
@@ -121,7 +121,12 @@ fn main() {
     //     termination_prob: roulette,
     // };
 
-    let scene = SceneDescription::load(&args.scene);
+    let mut scene = SceneDescription::load(&args.scene);
+    scene.samples = samples as usize;
+    scene.termination_prob = roulette;
+    scene.camera.half_tan_fov_y = scene.camera.half_tan_fov_x * (height as f64 / width as f64);
+    scene.camera.width_px = width as usize;
+    scene.camera.height_px = height as usize;
     let (world, mut renderer) = scene.build();
     let start = std::time::Instant::now();
     renderer.render(&world);

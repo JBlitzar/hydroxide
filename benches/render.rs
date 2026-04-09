@@ -1,10 +1,10 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use oxide::camera::Camera;
-use oxide::geometry::mesh::MeshBVH;
-use oxide::scene::{MaterialDesc, ObjectDesc, SceneDescription, SkyDesc};
-use oxide::vec3::Vec3;
+use hydroxide::camera::Camera;
+use hydroxide::geometry::mesh::MeshBVH;
+use hydroxide::scene::{MaterialDesc, ObjectDesc, SceneDescription, SkyDesc};
+use hydroxide::vec3::Vec3;
 
 fn bench_render(c: &mut Criterion) {
     c.bench_function("render balls", |b| {

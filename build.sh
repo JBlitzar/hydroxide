@@ -8,7 +8,7 @@ RUSTFLAGS='-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128,+re
   -Z build-std=panic_abort,std
 
 wasm-bindgen --target web --out-dir web/pkg \
-  target/wasm32-unknown-unknown/release/oxide.wasm
+  target/wasm32-unknown-unknown/release/hydroxide.wasm
 
 wasm-opt -O3 \
   --enable-simd \
@@ -22,16 +22,16 @@ wasm-opt -O3 \
   --gufa \
   --strip-debug \
   --strip-producers \
-  -o web/pkg/oxide_bg.wasm \
-  web/pkg/oxide_bg.wasm
+  -o web/pkg/hydroxide_bg.wasm \
+  web/pkg/hydroxide_bg.wasm
 
 
 cat > web/pkg/index.js << 'EOF'
-export * from './oxide.js';
-export { default } from './oxide.js';
+export * from './hydroxide.js';
+export { default } from './hydroxide.js';
 EOF
 
-sed -i '' "s|import('../../..')|import('../../../oxide.js')|g" \
+sed -i '' "s|import('../../..')|import('../../../hydroxide.js')|g" \
        web/pkg/snippets/wasm-bindgen-rayon-*/src/workerHelpers.js
 
 echo "=== Build complete ==="

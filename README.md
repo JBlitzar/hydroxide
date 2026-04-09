@@ -1,10 +1,10 @@
-# oxide
+# hydroxide
 
 ![](docs/colored_lighting.png)
 
 ### Run it here!
 
-[oxide-460.pages.dev](https://oxide-460.pages.dev/)
+[hydroxide.pages.dev](https://hydroxide.pages.dev/)
 
 A physically accurate CPU path tracer written in Rust. Compiles to WASM.
 

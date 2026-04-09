@@ -146,7 +146,8 @@ impl Renderer {
                     const z: f64 = 2.576; // 1.96
                     const absolute_floor: f64 = 0.01;
                     let ci2 = (z * z) * (sigma_squared / n);
-                    let tol2 = (self.max_tolerance * mu).max(absolute_floor) * (self.max_tolerance * mu).max(absolute_floor);
+                    let tol2 = (self.max_tolerance * mu).max(absolute_floor)
+                        * (self.max_tolerance * mu).max(absolute_floor);
                     if ci2 < tol2 {
                         break;
                     }
@@ -364,7 +365,9 @@ impl Renderer {
                 }
                 avg_neighbor = avg_neighbor.scalar_mul(1.0 / 8.0);
 
-                if current < min_neighbor_brightness * 0.8 || current > max_neighbor_brightness * 1.2 {
+                if current < min_neighbor_brightness * 0.8
+                    || current > max_neighbor_brightness * 1.2
+                {
                     self.img_buffer[idx] = avg_neighbor.x as u8;
                     self.img_buffer[idx + 1] = avg_neighbor.y as u8;
                     self.img_buffer[idx + 2] = avg_neighbor.z as u8;

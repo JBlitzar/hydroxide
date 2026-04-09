@@ -1,4 +1,4 @@
-import init, { WasmRenderer, initThreadPool } from "./pkg/oxide.js";
+import init, { WasmRenderer, initThreadPool } from "./pkg/hydroxide.js";
 
 let renderer = null;
 let pendingMutations = [];

@@ -1,4 +1,4 @@
-import init, { WasmRenderer, initThreadPool } from "./pkg/oxide.js";
+import init, { WasmRenderer, initThreadPool } from "./pkg/hydroxide.js";
 
 function isSafari(ua, vendor) {
   if (!vendor || !vendor.includes("Apple")) return false;
@@ -19,7 +19,7 @@ function blockUnsupported() {
   const blocked = isMobileDevice() || isSafari(ua, vendor);
   if (!blocked) return false;
 
-  const gh = "https://github.com/jblitzar/oxide";
+  const gh = "https://github.com/jblitzar/hydroxide";
   const info = document.getElementById("info");
   if (info) {
     info.innerHTML = `Unsupported on mobile/Safari. Please use Chrome/Firefox on desktop. <a href="${gh}" target="_blank" rel="noreferrer">[Github]</a>`;
@@ -234,7 +234,7 @@ function displayFrame(rgba, w, h, label) {
   }
   if (selectedIndex >= 0) drawOutlineOverlay();
   info.innerHTML =
-    "<a href='https://github.com/jblitzar/oxide' target='_blank'>[Github]</a> | " +
+    "<a href='https://github.com/jblitzar/hydroxide' target='_blank'>[Github]</a> | " +
     label;
 }
 
