@@ -45,7 +45,7 @@ fn main() {
 
     let profile = env!("HYDROXIDE_PROFILE");
     let (width, height, samples, roulette) = match profile {
-        "iteration" => (1920, 1080, 100, 0.1),
+        "iteration" => (960, 540, 100, 0.1),
         "extra" => (3840, 2160, 1_000, 0.05),
         _ => (args.width, args.height, args.samples, args.roulette),
     };
