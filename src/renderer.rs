@@ -144,7 +144,7 @@ impl Renderer {
                 let sigma_squared = (s2 - (s1 * s1) / n) / (n - 1.0);
                 if mu > 0.0 && sigma_squared.is_finite() && sigma_squared >= 0.0 {
                     const z: f64 = 2.576; // 1.96
-                    const absolute_floor: f64 = 0.01;
+                    const absolute_floor: f64 = 0.1;
                     let ci2 = (z * z) * (sigma_squared / n);
                     let tol2 = (self.max_tolerance * mu).max(absolute_floor)
                         * (self.max_tolerance * mu).max(absolute_floor);
