@@ -1,7 +1,10 @@
 [package]
-name = "oxide"
+name = "hydroxide"
 version = "0.1.0"
 edition = "2024"
+description = "CPU path tracer written in Rust"
+license = "GNU GPLv3"
+repository = "https://github.com/JBlitzar/hydroxide"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
