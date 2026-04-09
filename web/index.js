@@ -85,6 +85,8 @@ let workerBusy = false;
 let currentToken = 0;
 let currentPass = 0;
 let lastHdrBytes = null;
+let lastHdrIndex = -1;
+let renderPaused = false;
 const workerUrl = new URL("./render-worker.js", import.meta.url);
 
 let spareWorker = null;
@@ -107,6 +109,10 @@ const matFuzz = document.getElementById("mat-fuzz");
 const matRI = document.getElementById("mat-ri");
 const fieldFuzz = document.getElementById("field-fuzz");
 const fieldRI = document.getElementById("field-ri");
+const paramRotation = document.getElementById("param-rotation");
+const rotX = document.getElementById("rot-x");
+const rotY = document.getElementById("rot-y");
+const rotZ = document.getElementById("rot-z");
 const btnApply = document.getElementById("btn-apply");
 const btnDelete = document.getElementById("btn-delete");
 const addObjectSelect = document.getElementById("add-object");
@@ -223,6 +229,7 @@ function drawOutlineOverlay() {
 }
 
 function displayFrame(rgba, w, h, label) {
+  if (renderPaused) return;
   const imgData = new ImageData(new Uint8ClampedArray(rgba), w, h);
   if (w < canvas.width || h < canvas.height) {
     const offscreen = new OffscreenCanvas(w, h);
@@ -268,7 +275,7 @@ function renderPreview() {
 }
 
 function sendRender() {
-  if (!workerReady || isDragging) return;
+  if (!workerReady || isDragging || renderPaused) return;
   const [scale, samples, termProb] = PASSES[currentPass];
   const base = renderBaseSize();
   const w = Math.max(1, Math.floor(base.w * scale));
@@ -344,8 +351,12 @@ function syncWorkerState(worker) {
   if (!mainRenderer) return;
   const snap = mainRenderer.snapshot();
   worker.postMessage({ type: "restore", bytes: snap });
-  if (lastHdrBytes) {
-    worker.postMessage({ type: "set_sky_hdr_bytes", bytes: lastHdrBytes });
+  if (lastHdrBytes && lastHdrIndex >= 0) {
+    worker.postMessage({
+      type: "set_sky_hdr",
+      hdr_index: lastHdrIndex,
+      bytes: lastHdrBytes,
+    });
   }
 }
 
@@ -356,6 +367,7 @@ function invalidateAndKick() {
 }
 
 function fullRerender() {
+  renderPaused = false;
   currentToken++;
   renderPreview();
   kick();
@@ -439,14 +451,17 @@ skySelect.addEventListener("change", async () => {
     const idx = parseInt(val.split(":")[1]);
     mainRenderer.set_sky(idx);
     lastHdrBytes = null;
+    lastHdrIndex = -1;
     sendWorkerMessage({ type: "set_sky", index: idx });
     fullRerender();
   } else if (val.startsWith("hdr:")) {
     const url = val.split(":").slice(1).join(":");
+    const hdrIdx = HDR_SKIES.findIndex((h) => h.url === url);
     const bytes = await loadHdrSky(url);
-    mainRenderer.set_sky_hdr_bytes(bytes);
+    mainRenderer.set_sky_hdr(hdrIdx, bytes);
     lastHdrBytes = bytes;
-    sendWorkerMessage({ type: "set_sky_hdr_bytes", bytes });
+    lastHdrIndex = hdrIdx;
+    sendWorkerMessage({ type: "set_sky_hdr", hdr_index: hdrIdx, bytes });
     fullRerender();
   }
 });
@@ -535,14 +550,20 @@ btnApply.addEventListener("click", () => {
       fuzz,
       ri,
     });
-  } else if (selectedObjType === 1) {
+  } else {
     const size = parseFloat(objSize.value) || 1.0;
-    mainRenderer.update_cube(
+    const rx = (parseFloat(rotX.value) || 0) * DEG2RAD;
+    const ry = (parseFloat(rotY.value) || 0) * DEG2RAD;
+    const rz = (parseFloat(rotZ.value) || 0) * DEG2RAD;
+    mainRenderer.update_mesh(
       selectedIndex,
       x,
       y,
       z,
       size,
+      rx,
+      ry,
+      rz,
       mt,
       r,
       g,
@@ -551,29 +572,15 @@ btnApply.addEventListener("click", () => {
       ri,
     );
     sendWorkerMessage({
-      type: "update_cube",
-      index: selectedIndex,
-      x,
-      y,
-      z,
-      size,
-      mat_type: mt,
-      r,
-      g,
-      b,
-      fuzz,
-      ri,
-    });
-  } else {
-    const size = parseFloat(objSize.value) || 1.0;
-    mainRenderer.update_mesh(selectedIndex, x, y, z, size, mt, r, g, b, fuzz, ri);
-    sendWorkerMessage({
       type: "update_mesh",
       index: selectedIndex,
       x,
       y,
       z,
       size,
+      rx,
+      ry,
+      rz,
       mat_type: mt,
       r,
       g,
@@ -656,7 +663,19 @@ stlUpload.addEventListener("change", async () => {
   const x = 0;
   const y = 1.0;
   const z = -5;
-  const idx = mainRenderer.add_mesh_stl(buf, x, y, z, 2.0, 0, 0.5, 0.5, 0.8, 0, 1.5);
+  const idx = mainRenderer.add_mesh_stl(
+    buf,
+    x,
+    y,
+    z,
+    2.0,
+    0,
+    0.5,
+    0.5,
+    0.8,
+    0,
+    1.5,
+  );
   sendWorkerMessage({
     type: "add_mesh_stl",
     bytes: buf,
@@ -679,14 +698,19 @@ stlUpload.addEventListener("change", async () => {
   safeComputeOutline();
 });
 
+const RAD2DEG = 180 / Math.PI;
+const DEG2RAD = Math.PI / 180;
+
 function loadObjectToPanel(index) {
   if (!mainRenderer) return;
   const nfo = mainRenderer.get_object_info(index);
-  if (!nfo || nfo.length < 11) return;
+  if (!nfo || nfo.length < 14) return;
 
   selectedObjType = nfo[0];
   const isMesh = selectedObjType === 2;
   const isSphere = selectedObjType === 0;
+  const isCube = selectedObjType === 1;
+  const hasMeshVerts = isMesh || isCube;
 
   posX.value = nfo[1].toFixed(2);
   posY.value = nfo[2].toFixed(2);
@@ -708,6 +732,11 @@ function loadObjectToPanel(index) {
     paramRadius.style.display = "none";
     paramSize.style.display = "block";
   }
+
+  paramRotation.style.display = hasMeshVerts ? "block" : "none";
+  rotX.value = (nfo[11] * RAD2DEG).toFixed(1);
+  rotY.value = (nfo[12] * RAD2DEG).toFixed(1);
+  rotZ.value = (nfo[13] * RAD2DEG).toFixed(1);
 
   objType.disabled = isMesh;
   posX.disabled = false;
@@ -873,6 +902,14 @@ downloadBtn.addEventListener("click", () => {
   a.download = "exported.scene";
   a.click();
   URL.revokeObjectURL(url);
+  renderPaused = true;
+  currentToken++;
+  info.innerHTML =
+    "<a id='resume-link' href='#' style='color:#ff0;text-decoration:underline;cursor:pointer'>paused for local render, click to resume</a>";
+  document.getElementById("resume-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    fullRerender();
+  });
   showExportToast();
 });
 

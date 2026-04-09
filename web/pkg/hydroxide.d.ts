@@ -18,12 +18,13 @@ export class WasmRenderer {
     render(width: number, height: number, fov: number, cam_x: number, cam_y: number, cam_z: number, target_x: number, target_y: number, target_z: number, samples: number, termination_prob: number, focus_distance: number, aperture: number): Uint8Array;
     restore(bytes: Uint8Array): void;
     set_sky(index: number): void;
+    set_sky_hdr(hdr_index: number, bytes: Uint8Array): void;
     set_sky_hdr_bytes(bytes: Uint8Array): void;
     sky_count(): number;
     sky_name(index: number): string;
     snapshot(): Uint8Array;
     update_cube(index: number, x: number, y: number, z: number, size: number, mat_type: number, r: number, g: number, b: number, fuzz: number, refractive_index: number): void;
-    update_mesh(index: number, new_cx: number, new_cy: number, new_cz: number, new_size: number, mat_type: number, r: number, g: number, b: number, fuzz: number, refractive_index: number): void;
+    update_mesh(index: number, new_cx: number, new_cy: number, new_cz: number, new_size: number, rot_x: number, rot_y: number, rot_z: number, mat_type: number, r: number, g: number, b: number, fuzz: number, refractive_index: number): void;
     update_mesh_material(index: number, mat_type: number, r: number, g: number, b: number, fuzz: number, refractive_index: number): void;
     update_sphere(index: number, x: number, y: number, z: number, radius: number, mat_type: number, r: number, g: number, b: number, fuzz: number, refractive_index: number): void;
 }
@@ -59,12 +60,13 @@ export interface InitOutput {
     readonly wasmrenderer_render: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => void;
     readonly wasmrenderer_restore: (a: number, b: number, c: number) => void;
     readonly wasmrenderer_set_sky: (a: number, b: number) => void;
+    readonly wasmrenderer_set_sky_hdr: (a: number, b: number, c: number, d: number) => void;
     readonly wasmrenderer_set_sky_hdr_bytes: (a: number, b: number, c: number) => void;
     readonly wasmrenderer_sky_count: (a: number) => number;
     readonly wasmrenderer_sky_name: (a: number, b: number, c: number) => void;
     readonly wasmrenderer_snapshot: (a: number, b: number) => void;
     readonly wasmrenderer_update_cube: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => void;
-    readonly wasmrenderer_update_mesh: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => void;
+    readonly wasmrenderer_update_mesh: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => void;
     readonly wasmrenderer_update_mesh_material: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly wasmrenderer_update_sphere: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => void;
     readonly __wbg_wbg_rayon_poolbuilder_free: (a: number, b: number) => void;

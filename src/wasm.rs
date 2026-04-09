@@ -67,6 +67,7 @@ impl Sky for ArcSky {
 pub struct WasmRenderer {
     objects: Vec<ObjectDesc>,
     kinds: Vec<ObjectKind>,
+    rotations: Vec<Vec3>,
     sky: SkyDesc,
     hdr_sky: Option<Arc<HDRSky>>,
 }
@@ -143,9 +144,11 @@ impl WasmRenderer {
             ObjectKind::Cube,   // cube
             ObjectKind::Ground, // ground checkerboard
         ];
+        let rotations = vec![Vec3::ZERO; kinds.len()];
         WasmRenderer {
             objects,
             kinds,
+            rotations,
             sky: (SKY_TABLE[0].build)(),
             hdr_sky: None,
         }
@@ -170,6 +173,17 @@ impl WasmRenderer {
     }
 
     pub fn set_sky_hdr_bytes(&mut self, bytes: &[u8]) {
+        self.hdr_sky = Some(Arc::new(HDRSky::from_hdr_bytes(bytes)));
+    }
+
+    pub fn set_sky_hdr(&mut self, hdr_index: u32, bytes: &[u8]) {
+        use crate::scene::HdrSkyId;
+        let id = match hdr_index {
+            0 => HdrSkyId::CitrusOrchard,
+            1 => HdrSkyId::QwantaniMoonrise,
+            _ => return,
+        };
+        self.sky = SkyDesc::Hdr { id, exposure: 1.0 };
         self.hdr_sky = Some(Arc::new(HDRSky::from_hdr_bytes(bytes)));
     }
 
@@ -294,6 +308,7 @@ impl WasmRenderer {
             return vec![];
         }
         let kind = self.kinds[idx];
+        let rot = self.rotations[idx];
         let obj_type_f = match kind {
             ObjectKind::Sphere | ObjectKind::Ground => 0.0,
             ObjectKind::Cube => 1.0,
@@ -309,7 +324,7 @@ impl WasmRenderer {
                 let (mt, albedo, fuzz, ri) = Self::read_material_desc(material);
                 vec![
                     obj_type_f, center.x, center.y, center.z, *radius, mt, albedo.x, albedo.y,
-                    albedo.z, fuzz, ri,
+                    albedo.z, fuzz, ri, rot.x, rot.y, rot.z,
                 ]
             }
             ObjectDesc::Mesh {
@@ -323,12 +338,14 @@ impl WasmRenderer {
                 let (mt, albedo, fuzz, ri) = Self::read_material_desc(material);
                 vec![
                     obj_type_f, cx, cy, cz, size, mt, albedo.x, albedo.y, albedo.z, fuzz, ri,
+                    rot.x, rot.y, rot.z,
                 ]
             }
             ObjectDesc::Plane { material, .. } => {
                 let (mt, albedo, fuzz, ri) = Self::read_material_desc(material);
                 vec![
                     obj_type_f, 0.0, 0.0, 0.0, 0.0, mt, albedo.x, albedo.y, albedo.z, fuzz, ri,
+                    rot.x, rot.y, rot.z,
                 ]
             }
         }
@@ -353,6 +370,7 @@ impl WasmRenderer {
             material: Self::make_material_desc(mat_type, r, g, b, fuzz, refractive_index),
         });
         self.kinds.push(ObjectKind::Sphere);
+        self.rotations.push(Vec3::ZERO);
         (self.objects.len() - 1) as u32
     }
 
@@ -376,6 +394,7 @@ impl WasmRenderer {
             material: Self::make_material_desc(mat_type, r, g, b, fuzz, refractive_index),
         });
         self.kinds.push(ObjectKind::Cube);
+        self.rotations.push(Vec3::ZERO);
         (self.objects.len() - 1) as u32
     }
 
@@ -384,6 +403,7 @@ impl WasmRenderer {
         if idx < self.objects.len() {
             self.objects.remove(idx);
             self.kinds.remove(idx);
+            self.rotations.remove(idx);
         }
     }
 
@@ -467,6 +487,9 @@ impl WasmRenderer {
         new_cy: f64,
         new_cz: f64,
         new_size: f64,
+        rot_x: f64,
+        rot_y: f64,
+        rot_z: f64,
         mat_type: u32,
         r: f64,
         g: f64,
@@ -478,6 +501,8 @@ impl WasmRenderer {
         if idx >= self.objects.len() {
             return;
         }
+        let old_rot = self.rotations[idx];
+        let new_rot = Vec3::new(rot_x, rot_y, rot_z);
         if let ObjectDesc::Mesh {
             ref mut vertices,
             ref mut material,
@@ -494,13 +519,18 @@ impl WasmRenderer {
             } else {
                 1.0
             };
+            let neg_old = Vec3::new(-old_rot.x, -old_rot.y, -old_rot.z);
+            let center = Vec3::new(cx, cy, cz);
             for v in vertices.iter_mut() {
-                v.x = (v.x - cx) * scale + new_cx;
-                v.y = (v.y - cy) * scale + new_cy;
-                v.z = (v.z - cz) * scale + new_cz;
+                // undo old rotation, scale, apply new rotation, translate
+                let local = v.sub(&center).rotate(&neg_old);
+                let scaled = local.scalar_mul(scale);
+                let rotated = scaled.rotate(&new_rot);
+                *v = rotated.add(&Vec3::new(new_cx, new_cy, new_cz));
             }
             *material = Self::make_material_desc(mat_type, r, g, b, fuzz, refractive_index);
         }
+        self.rotations[idx] = new_rot;
     }
 
     pub fn add_mesh_stl(
@@ -525,6 +555,7 @@ impl WasmRenderer {
             material: Self::make_material_desc(mat_type, r, g, b, fuzz, refractive_index),
         });
         self.kinds.push(ObjectKind::Mesh);
+        self.rotations.push(Vec3::ZERO);
         (self.objects.len() - 1) as u32
     }
 
@@ -565,14 +596,16 @@ impl WasmRenderer {
     }
 
     pub fn snapshot(&self) -> Vec<u8> {
-        bincode::serialize(&(&self.objects, &self.kinds, &self.sky)).expect("snapshot serialize")
+        bincode::serialize(&(&self.objects, &self.kinds, &self.rotations, &self.sky))
+            .expect("snapshot serialize")
     }
 
     pub fn restore(&mut self, bytes: &[u8]) {
-        let (objects, kinds, sky): (Vec<ObjectDesc>, Vec<ObjectKind>, SkyDesc) =
+        let (objects, kinds, rotations, sky): (Vec<ObjectDesc>, Vec<ObjectKind>, Vec<Vec3>, SkyDesc) =
             bincode::deserialize(bytes).expect("snapshot deserialize");
         self.objects = objects;
         self.kinds = kinds;
+        self.rotations = rotations;
         self.sky = sky;
         self.hdr_sky = None;
     }

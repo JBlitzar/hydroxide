@@ -139,14 +139,41 @@ impl SkyDesc {
             }),
             SkyDesc::Solid { color } => Box::new(crate::sky::SolidColorSky { color: *color }),
             SkyDesc::Hdr { id, exposure } => {
-                let path = match id {
-                    HdrSkyId::CitrusOrchard => "web/res/citrus_orchard_road_puresky_4k.hdr",
-                    HdrSkyId::QwantaniMoonrise => "web/res/qwantani_moonrise_puresky_4k.hdr",
+                let filename = match id {
+                    HdrSkyId::CitrusOrchard => "citrus_orchard_road_puresky_4k.hdr",
+                    HdrSkyId::QwantaniMoonrise => "qwantani_moonrise_puresky_4k.hdr",
                 };
-                let mut sky = crate::sky::HDRSky::from_hdr_file(path);
+                let local_path = format!("web/res/{}", filename);
+                let mut sky = if std::path::Path::new(&local_path).exists() {
+                    crate::sky::HDRSky::from_hdr_file(&local_path)
+                } else {
+                    Self::download_hdr(filename)
+                };
                 sky.exposure = *exposure;
                 Box::new(sky)
             }
+        }
+    }
+
+    fn download_hdr(filename: &str) -> crate::sky::HDRSky {
+        let url = format!("https://hydroxide.pages.dev/res/{}", filename);
+        eprintln!("HDR not found locally, downloading from {}...", url);
+        #[cfg(feature = "native")]
+        {
+            let resp = ureq::get(&url).call().expect("Failed to download HDR");
+            let len = resp
+                .header("Content-Length")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(0);
+            let mut bytes = Vec::with_capacity(len);
+            std::io::Read::read_to_end(&mut resp.into_reader(), &mut bytes)
+                .expect("Failed to read HDR response");
+            eprintln!("Downloaded {} bytes", bytes.len());
+            crate::sky::HDRSky::from_hdr_bytes(&bytes)
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            panic!("HDR download not supported in this build");
         }
     }
 }

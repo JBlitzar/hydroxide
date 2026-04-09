@@ -242,6 +242,15 @@ export class WasmRenderer {
         wasm.wasmrenderer_set_sky(this.__wbg_ptr, index);
     }
     /**
+     * @param {number} hdr_index
+     * @param {Uint8Array} bytes
+     */
+    set_sky_hdr(hdr_index, bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.wasmrenderer_set_sky_hdr(this.__wbg_ptr, hdr_index, ptr0, len0);
+    }
+    /**
      * @param {Uint8Array} bytes
      */
     set_sky_hdr_bytes(bytes) {
@@ -314,6 +323,9 @@ export class WasmRenderer {
      * @param {number} new_cy
      * @param {number} new_cz
      * @param {number} new_size
+     * @param {number} rot_x
+     * @param {number} rot_y
+     * @param {number} rot_z
      * @param {number} mat_type
      * @param {number} r
      * @param {number} g
@@ -321,8 +333,8 @@ export class WasmRenderer {
      * @param {number} fuzz
      * @param {number} refractive_index
      */
-    update_mesh(index, new_cx, new_cy, new_cz, new_size, mat_type, r, g, b, fuzz, refractive_index) {
-        wasm.wasmrenderer_update_mesh(this.__wbg_ptr, index, new_cx, new_cy, new_cz, new_size, mat_type, r, g, b, fuzz, refractive_index);
+    update_mesh(index, new_cx, new_cy, new_cz, new_size, rot_x, rot_y, rot_z, mat_type, r, g, b, fuzz, refractive_index) {
+        wasm.wasmrenderer_update_mesh(this.__wbg_ptr, index, new_cx, new_cy, new_cz, new_size, rot_x, rot_y, rot_z, mat_type, r, g, b, fuzz, refractive_index);
     }
     /**
      * @param {number} index

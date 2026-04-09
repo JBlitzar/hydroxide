@@ -37,10 +37,11 @@ bincode = "1.3.3"
 flate2 = "1"
 clap = { version = "4.6.0", features = ["derive"], optional = true }
 open = { version = "5.3.3", optional = true }
+ureq = { version = "2", optional = true }
 
 [features]
 default = ["native"]
-native = ["indicatif", "clap", "open"]
+native = ["indicatif", "clap", "open", "ureq"]
 wasm = ["wasm-bindgen", "wasm-bindgen-rayon", "js-sys", "web-sys"]
 
 [dev-dependencies]
