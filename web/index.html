@@ -21,6 +21,44 @@
         image-rendering: crisp-edges;
         image-rendering: pixelated;
       }
+      #gizmo-widget {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 25;
+        display: none;
+        background: rgba(10, 10, 10, 0.85);
+        backdrop-filter: blur(8px);
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 6px;
+      }
+      .gizmo-mode {
+        display: flex;
+        gap: 2px;
+        margin-bottom: 4px;
+      }
+      .gizmo-tab {
+        flex: 1;
+        background: #1a1a1a;
+        color: #888;
+        border: 1px solid #333;
+        padding: 2px 0;
+        font-family: monospace;
+        font-size: 11px;
+        cursor: pointer;
+        border-radius: 3px;
+      }
+      .gizmo-tab.active {
+        background: #333;
+        color: #fff;
+      }
+      .gizmo-tab:hover { color: #fff; }
+      #gizmo-pad {
+        display: block;
+        cursor: grab;
+      }
+      #gizmo-pad:active { cursor: grabbing; }
       .infolike {
         position: fixed;
         top: 10px;
@@ -284,6 +322,13 @@
   </head>
   <body>
     <canvas id="canvas"></canvas>
+    <div id="gizmo-widget">
+      <div class="gizmo-mode">
+        <button id="gizmo-translate" class="gizmo-tab active">Move</button>
+        <button id="gizmo-rotate" class="gizmo-tab">Rotate</button>
+      </div>
+      <canvas id="gizmo-pad" width="120" height="120"></canvas>
+    </div>
 
     <div id="info" class="infolike">Loading WASM...</div>
     <br />
@@ -291,7 +336,7 @@
       Renders refine over time.<br />
       Drag to rotate.<br />
       Scroll to zoom.<br />
-      Click to select. <br />
+      Click to select.<br />
     </div>
     <select id="sky-select"></select>
 

@@ -244,6 +244,7 @@ function displayFrame(rgba, w, h, label) {
   info.innerHTML =
     "<a href='https://github.com/jblitzar/hydroxide' target='_blank'>[Github]</a> | " +
     label;
+  drawGizmos();
 }
 
 function renderPreview() {
@@ -477,6 +478,7 @@ function selectObject(index) {
     panel.classList.remove("open");
     panelContent.classList.remove("active");
   }
+  drawGizmos();
 }
 
 function deselect() {
@@ -700,6 +702,198 @@ stlUpload.addEventListener("change", async () => {
 
 const RAD2DEG = 180 / Math.PI;
 const DEG2RAD = Math.PI / 180;
+
+// --- Gizmo widget ---
+const gizmoWidget = document.getElementById("gizmo-widget");
+const gizmoPad = document.getElementById("gizmo-pad");
+const gpc = gizmoPad.getContext("2d");
+const gizmoTranslateBtn = document.getElementById("gizmo-translate");
+const gizmoRotateBtn = document.getElementById("gizmo-rotate");
+let gizmoMode = "translate";
+let gizmoDragAxis = null;
+let gizmoDragStartY = 0;
+let gizmoDragStartNfo = null;
+const AXIS_COLORS = { x: "#e44", y: "#4e4", z: "#48f" };
+const AXIS_LABELS = { x: "X", y: "Y", z: "Z" };
+const PAD_W = 120, PAD_H = 120;
+
+gizmoTranslateBtn.addEventListener("click", () => {
+  gizmoMode = "translate";
+  gizmoTranslateBtn.classList.add("active");
+  gizmoRotateBtn.classList.remove("active");
+  drawGizmoPad();
+});
+gizmoRotateBtn.addEventListener("click", () => {
+  gizmoMode = "rotate";
+  gizmoRotateBtn.classList.add("active");
+  gizmoTranslateBtn.classList.remove("active");
+  drawGizmoPad();
+});
+
+function showGizmoWidget() {
+  const hasMesh = selectedObjType === 1 || selectedObjType === 2;
+  if (gizmoMode === "rotate" && !hasMesh) gizmoMode = "translate";
+  gizmoRotateBtn.style.display = hasMesh ? "" : "none";
+  gizmoTranslateBtn.classList.toggle("active", gizmoMode === "translate");
+  gizmoRotateBtn.classList.toggle("active", gizmoMode === "rotate");
+  gizmoWidget.style.display = "block";
+  drawGizmoPad();
+}
+
+function hideGizmoWidget() {
+  gizmoWidget.style.display = "none";
+}
+
+function drawGizmoPad() {
+  gpc.clearRect(0, 0, PAD_W, PAD_H);
+  const axes = ["x", "y", "z"];
+  const barW = 28, gap = 10;
+  const totalW = axes.length * barW + (axes.length - 1) * gap;
+  const startX = (PAD_W - totalW) / 2;
+
+  for (let i = 0; i < axes.length; i++) {
+    const a = axes[i];
+    const x = startX + i * (barW + gap);
+    const active = gizmoDragAxis === a;
+
+    if (gizmoMode === "translate") {
+      // vertical bar with arrow
+      gpc.fillStyle = active ? AXIS_COLORS[a] : "#222";
+      gpc.strokeStyle = AXIS_COLORS[a];
+      gpc.lineWidth = 1;
+      gpc.beginPath();
+      gpc.roundRect(x, 20, barW, PAD_H - 40, 4);
+      gpc.fill();
+      gpc.stroke();
+      // arrow up
+      gpc.beginPath();
+      gpc.moveTo(x + barW / 2, 12);
+      gpc.lineTo(x + barW / 2 - 6, 22);
+      gpc.lineTo(x + barW / 2 + 6, 22);
+      gpc.closePath();
+      gpc.fillStyle = AXIS_COLORS[a];
+      gpc.fill();
+      // arrow down
+      gpc.beginPath();
+      gpc.moveTo(x + barW / 2, PAD_H - 12);
+      gpc.lineTo(x + barW / 2 - 6, PAD_H - 22);
+      gpc.lineTo(x + barW / 2 + 6, PAD_H - 22);
+      gpc.closePath();
+      gpc.fill();
+    } else {
+      // arc for rotation
+      const cx = x + barW / 2, cy = PAD_H / 2, r = 30;
+      gpc.beginPath();
+      gpc.arc(cx, cy, r, -Math.PI * 0.8, Math.PI * 0.8);
+      gpc.strokeStyle = AXIS_COLORS[a];
+      gpc.lineWidth = active ? 4 : 2.5;
+      gpc.stroke();
+      // arrow tips on arc ends
+      const drawTip = (angle, dir) => {
+        const tx = cx + r * Math.cos(angle);
+        const ty = cy + r * Math.sin(angle);
+        const ta = angle + dir * Math.PI / 2;
+        gpc.beginPath();
+        gpc.moveTo(tx + 5 * Math.cos(ta - 0.5), ty + 5 * Math.sin(ta - 0.5));
+        gpc.lineTo(tx, ty);
+        gpc.lineTo(tx + 5 * Math.cos(ta + 0.5), ty + 5 * Math.sin(ta + 0.5));
+        gpc.strokeStyle = AXIS_COLORS[a];
+        gpc.lineWidth = 2;
+        gpc.stroke();
+      };
+      drawTip(-Math.PI * 0.8, -1);
+      drawTip(Math.PI * 0.8, 1);
+    }
+    // label
+    gpc.fillStyle = "#fff";
+    gpc.font = "bold 11px monospace";
+    gpc.textAlign = "center";
+    gpc.fillText(AXIS_LABELS[a], x + barW / 2, PAD_H / 2 + 4);
+  }
+}
+
+function gizmoPadHitAxis(ex, ey) {
+  const rect = gizmoPad.getBoundingClientRect();
+  const lx = ex - rect.left, ly = ey - rect.top;
+  const axes = ["x", "y", "z"];
+  const barW = 28, gap = 10;
+  const totalW = axes.length * barW + (axes.length - 1) * gap;
+  const startX = (PAD_W - totalW) / 2;
+  for (let i = 0; i < axes.length; i++) {
+    const x = startX + i * (barW + gap);
+    if (lx >= x && lx <= x + barW && ly >= 8 && ly <= PAD_H - 8)
+      return axes[i];
+  }
+  return null;
+}
+
+function applyGizmoWidgetDrag(axis, dy) {
+  if (selectedIndex < 0 || !mainRenderer || !gizmoDragStartNfo) return;
+  const nfo = gizmoDragStartNfo;
+  const worldScale = distance * 0.005;
+
+  if (gizmoMode === "translate") {
+    const delta = -dy * worldScale;
+    const nx = axis === "x" ? nfo[1] + delta : nfo[1];
+    const ny = axis === "y" ? nfo[2] + delta : nfo[2];
+    const nz = axis === "z" ? nfo[3] + delta : nfo[3];
+
+    if (selectedObjType === 0) {
+      mainRenderer.update_sphere(selectedIndex, nx, ny, nz, nfo[4], Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
+      sendWorkerMessage({ type: "update_sphere", index: selectedIndex, x: nx, y: ny, z: nz, radius: nfo[4], mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+    } else {
+      mainRenderer.update_mesh(selectedIndex, nx, ny, nz, nfo[4], nfo[11], nfo[12], nfo[13], Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
+      sendWorkerMessage({ type: "update_mesh", index: selectedIndex, x: nx, y: ny, z: nz, size: nfo[4], rx: nfo[11], ry: nfo[12], rz: nfo[13], mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+    }
+  } else {
+    if (selectedObjType === 0) return;
+    const rotDelta = -dy * 0.02;
+    const rx = axis === "x" ? nfo[11] + rotDelta : nfo[11];
+    const ry = axis === "y" ? nfo[12] + rotDelta : nfo[12];
+    const rz = axis === "z" ? nfo[13] + rotDelta : nfo[13];
+    mainRenderer.update_mesh(selectedIndex, nfo[1], nfo[2], nfo[3], nfo[4], rx, ry, rz, Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
+    sendWorkerMessage({ type: "update_mesh", index: selectedIndex, x: nfo[1], y: nfo[2], z: nfo[3], size: nfo[4], rx, ry, rz, mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+  }
+  renderPreview();
+  loadObjectToPanel(selectedIndex);
+}
+
+gizmoPad.addEventListener("mousedown", (e) => {
+  if (selectedIndex < 0 || !mainRenderer) return;
+  const axis = gizmoPadHitAxis(e.clientX, e.clientY);
+  if (!axis) return;
+  e.preventDefault();
+  e.stopPropagation();
+  gizmoDragAxis = axis;
+  gizmoDragStartY = e.clientY;
+  gizmoDragStartNfo = Array.from(mainRenderer.get_object_info(selectedIndex));
+  drawGizmoPad();
+
+  const onMove = (ev) => {
+    const dy = ev.clientY - gizmoDragStartY;
+    applyGizmoWidgetDrag(gizmoDragAxis, dy);
+    drawGizmoPad();
+  };
+  const onUp = () => {
+    gizmoDragAxis = null;
+    gizmoDragStartNfo = null;
+    drawGizmoPad();
+    safeComputeOutline();
+    kick();
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+  };
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+});
+
+function drawGizmos() {
+  if (selectedIndex >= 0 && !renderPaused) {
+    showGizmoWidget();
+  } else {
+    hideGizmoWidget();
+  }
+}
 
 function loadObjectToPanel(index) {
   if (!mainRenderer) return;

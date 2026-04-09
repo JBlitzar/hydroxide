@@ -68,6 +68,7 @@ pub struct WasmRenderer {
     objects: Vec<ObjectDesc>,
     kinds: Vec<ObjectKind>,
     rotations: Vec<Vec3>,
+    base_verts: Vec<Option<Vec<Vec3>>>,
     sky: SkyDesc,
     hdr_sky: Option<Arc<HDRSky>>,
 }
@@ -145,10 +146,18 @@ impl WasmRenderer {
             ObjectKind::Ground, // ground checkerboard
         ];
         let rotations = vec![Vec3::ZERO; kinds.len()];
+        let base_verts: Vec<Option<Vec<Vec3>>> = objects
+            .iter()
+            .map(|o| match o {
+                ObjectDesc::Mesh { vertices, .. } => Some(Self::compute_base_verts(vertices)),
+                _ => None,
+            })
+            .collect();
         WasmRenderer {
             objects,
             kinds,
             rotations,
+            base_verts,
             sky: (SKY_TABLE[0].build)(),
             hdr_sky: None,
         }
@@ -371,6 +380,7 @@ impl WasmRenderer {
         });
         self.kinds.push(ObjectKind::Sphere);
         self.rotations.push(Vec3::ZERO);
+        self.base_verts.push(None);
         (self.objects.len() - 1) as u32
     }
 
@@ -388,6 +398,7 @@ impl WasmRenderer {
         refractive_index: f64,
     ) -> u32 {
         let (vertices, faces) = MeshBVH::cube_indexed(Vec3::new(x, y, z), size);
+        let base = Self::compute_base_verts(&vertices);
         self.objects.push(ObjectDesc::Mesh {
             vertices,
             faces,
@@ -395,6 +406,7 @@ impl WasmRenderer {
         });
         self.kinds.push(ObjectKind::Cube);
         self.rotations.push(Vec3::ZERO);
+        self.base_verts.push(Some(base));
         (self.objects.len() - 1) as u32
     }
 
@@ -404,6 +416,7 @@ impl WasmRenderer {
             self.objects.remove(idx);
             self.kinds.remove(idx);
             self.rotations.remove(idx);
+            self.base_verts.remove(idx);
         }
     }
 
@@ -501,32 +514,21 @@ impl WasmRenderer {
         if idx >= self.objects.len() {
             return;
         }
-        let old_rot = self.rotations[idx];
         let new_rot = Vec3::new(rot_x, rot_y, rot_z);
+        let center = Vec3::new(new_cx, new_cy, new_cz);
+        let base = self.base_verts[idx].clone();
         if let ObjectDesc::Mesh {
             ref mut vertices,
             ref mut material,
             ..
         } = self.objects[idx]
         {
-            let (small, big) = Self::mesh_bounds(vertices);
-            let cx = (small.x + big.x) * 0.5;
-            let cy = (small.y + big.y) * 0.5;
-            let cz = (small.z + big.z) * 0.5;
-            let cur_size = (big.x - small.x).max(big.y - small.y).max(big.z - small.z);
-            let scale = if cur_size > 1e-12 && new_size > 0.0 {
-                new_size / cur_size
-            } else {
-                1.0
-            };
-            let neg_old = Vec3::new(-old_rot.x, -old_rot.y, -old_rot.z);
-            let center = Vec3::new(cx, cy, cz);
-            for v in vertices.iter_mut() {
-                // undo old rotation, scale, apply new rotation, translate
-                let local = v.sub(&center).rotate(&neg_old);
-                let scaled = local.scalar_mul(scale);
-                let rotated = scaled.rotate(&new_rot);
-                *v = rotated.add(&Vec3::new(new_cx, new_cy, new_cz));
+            if let Some(ref base) = base {
+                for (v, bv) in vertices.iter_mut().zip(base.iter()) {
+                    let scaled = bv.scalar_mul(new_size);
+                    let rotated = scaled.rotate(&new_rot);
+                    *v = rotated.add(&center);
+                }
             }
             *material = Self::make_material_desc(mat_type, r, g, b, fuzz, refractive_index);
         }
@@ -549,6 +551,7 @@ impl WasmRenderer {
     ) -> u32 {
         let (vertices, faces) =
             MeshBVH::load_stl_bytes_indexed(stl_bytes, Some(size), Some(Vec3::new(x, y, z)), None);
+        let base = Self::compute_base_verts(&vertices);
         self.objects.push(ObjectDesc::Mesh {
             vertices,
             faces,
@@ -556,6 +559,7 @@ impl WasmRenderer {
         });
         self.kinds.push(ObjectKind::Mesh);
         self.rotations.push(Vec3::ZERO);
+        self.base_verts.push(Some(base));
         (self.objects.len() - 1) as u32
     }
 
@@ -596,16 +600,17 @@ impl WasmRenderer {
     }
 
     pub fn snapshot(&self) -> Vec<u8> {
-        bincode::serialize(&(&self.objects, &self.kinds, &self.rotations, &self.sky))
+        bincode::serialize(&(&self.objects, &self.kinds, &self.rotations, &self.base_verts, &self.sky))
             .expect("snapshot serialize")
     }
 
     pub fn restore(&mut self, bytes: &[u8]) {
-        let (objects, kinds, rotations, sky): (Vec<ObjectDesc>, Vec<ObjectKind>, Vec<Vec3>, SkyDesc) =
+        let (objects, kinds, rotations, base_verts, sky): (Vec<ObjectDesc>, Vec<ObjectKind>, Vec<Vec3>, Vec<Option<Vec<Vec3>>>, SkyDesc) =
             bincode::deserialize(bytes).expect("snapshot deserialize");
         self.objects = objects;
         self.kinds = kinds;
         self.rotations = rotations;
+        self.base_verts = base_verts;
         self.sky = sky;
         self.hdr_sky = None;
     }
@@ -647,6 +652,19 @@ impl WasmRenderer {
 }
 
 impl WasmRenderer {
+    fn compute_base_verts(vertices: &[Vec3]) -> Vec<Vec3> {
+        let (small, big) = Self::mesh_bounds(vertices);
+        let cx = (small.x + big.x) * 0.5;
+        let cy = (small.y + big.y) * 0.5;
+        let cz = (small.z + big.z) * 0.5;
+        let size = (big.x - small.x).max(big.y - small.y).max(big.z - small.z);
+        let inv = if size > 1e-12 { 1.0 / size } else { 1.0 };
+        vertices
+            .iter()
+            .map(|v| Vec3::new((v.x - cx) * inv, (v.y - cy) * inv, (v.z - cz) * inv))
+            .collect()
+    }
+
     fn mesh_bounds(vertices: &[Vec3]) -> (Vec3, Vec3) {
         let mut small = Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
         let mut big = Vec3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
