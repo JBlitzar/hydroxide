@@ -1,6 +1,6 @@
 [package]
 name = "hydroxide"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "CPU path tracer written in Rust"
 license = "GPL-3.0-only"
@@ -12,6 +12,7 @@ include = [
     "Cargo.toml",
     "LICENSE",
     "README.md",
+    "demo.scene",
 ]
 
 [lib]

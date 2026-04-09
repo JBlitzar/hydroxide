@@ -121,7 +121,16 @@ fn main() {
     //     termination_prob: roulette,
     // };
 
-    let mut scene = SceneDescription::load(&args.scene);
+    const EMBEDDED_DEMO: &[u8] = include_bytes!("../demo.scene");
+
+    let mut scene = if std::path::Path::new(&args.scene).exists() {
+        SceneDescription::load(&args.scene)
+    } else if args.scene == "demo.scene" {
+        SceneDescription::from_bytes(EMBEDDED_DEMO)
+    } else {
+        eprintln!("Scene file '{}' not found", args.scene);
+        std::process::exit(1);
+    };
     scene.samples = samples as usize;
     scene.termination_prob = roulette;
     scene.camera.half_tan_fov_y = scene.camera.half_tan_fov_x * (height as f64 / width as f64);
