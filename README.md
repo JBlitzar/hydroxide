@@ -1,10 +1,10 @@
-# oxide
+# hydroxide
 
 ![](docs/colored_lighting.png)
 
-### Run it here!
+### Run it online!
 
-[oxide-460.pages.dev](https://oxide-460.pages.dev/)
+[hydroxide.pages.dev](https://hydroxide.pages.dev/)
 
 A physically accurate CPU path tracer written in Rust. Compiles to WASM.
 
@@ -30,13 +30,12 @@ Then I realized that I had symmetric shading everywhere...
 
 ## Running natively
 
-You'll need to clone and `cargo run --release`. That's pretty much it. Edit main.rs for a different scene, if you'd like.
+Hydroxide is now on [crates.io](https://crates.io/crates/hydroxide)!
 
-You can get some truly amazing speeds natively! Especially with SIMD.
-
-I've made an effort to make the tooling very nice! You can benchmark with `cargo bench`, build WASM with `bash build.sh`, and serve WASM with `bash serve.sh`.
-
-No tests right now because it's nondeterministic timing with the threads even if the RNG is set-seed, and I know the math works because it, well, renders images that look right.
+```bash
+cargo install hydroxide
+hydroxide # Runs a demo, or --help to view options
+```
 
 ## Devlog
 

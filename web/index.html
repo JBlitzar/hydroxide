@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Oxide</title>
+    <title>Hydroxide</title>
     <style>
       * {
         margin: 0;
@@ -21,6 +21,44 @@
         image-rendering: crisp-edges;
         image-rendering: pixelated;
       }
+      #gizmo-widget {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 25;
+        display: none;
+        background: rgba(10, 10, 10, 0.85);
+        backdrop-filter: blur(8px);
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 6px;
+      }
+      .gizmo-mode {
+        display: flex;
+        gap: 2px;
+        margin-bottom: 4px;
+      }
+      .gizmo-tab {
+        flex: 1;
+        background: #1a1a1a;
+        color: #888;
+        border: 1px solid #333;
+        padding: 2px 0;
+        font-family: monospace;
+        font-size: 11px;
+        cursor: pointer;
+        border-radius: 3px;
+      }
+      .gizmo-tab.active {
+        background: #333;
+        color: #fff;
+      }
+      .gizmo-tab:hover { color: #fff; }
+      #gizmo-pad {
+        display: block;
+        cursor: grab;
+      }
+      #gizmo-pad:active { cursor: grabbing; }
       .infolike {
         position: fixed;
         top: 10px;
@@ -192,10 +230,105 @@
       .mat-field.visible {
         display: block;
       }
+
+      #download-scene {
+        position: fixed;
+        top: 70px;
+        right: 10px;
+        z-index: 20;
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        border: 1px solid #444;
+        padding: 4px 8px;
+        font-family: monospace;
+        font-size: 13px;
+        cursor: pointer;
+        backdrop-filter: blur(4px);
+      }
+      #download-scene:hover {
+        background: rgba(40, 40, 40, 0.85);
+      }
+
+      .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 100;
+        background: rgba(10, 10, 10, 0.92);
+        backdrop-filter: blur(8px);
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 14px 16px;
+        font-family: monospace;
+        font-size: 13px;
+        color: #ccc;
+        max-width: 440px;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .toast.hidden {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(10px);
+      }
+      .toast-close {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 16px;
+        cursor: pointer;
+        font-family: monospace;
+      }
+      .toast-close:hover { color: #fff; }
+      .toast-step {
+        margin: 6px 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .toast-step code {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-size: 12px;
+        color: #e8e8e8;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .toast-copy {
+        background: #222;
+        border: 1px solid #444;
+        color: #aaa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-family: monospace;
+        font-size: 11px;
+        flex-shrink: 0;
+      }
+      .toast-copy:hover { background: #333; color: #fff; }
+      .toast-label {
+        color: #666;
+        font-size: 11px;
+        margin-top: 8px;
+        margin-bottom: 2px;
+      }
     </style>
   </head>
   <body>
     <canvas id="canvas"></canvas>
+    <div id="gizmo-widget">
+      <div class="gizmo-mode">
+        <button id="gizmo-translate" class="gizmo-tab active">Move</button>
+        <button id="gizmo-rotate" class="gizmo-tab">Rotate</button>
+      </div>
+      <canvas id="gizmo-pad" width="120" height="120"></canvas>
+    </div>
 
     <div id="info" class="infolike">Loading WASM...</div>
     <br />
@@ -203,7 +336,7 @@
       Renders refine over time.<br />
       Drag to rotate.<br />
       Scroll to zoom.<br />
-      Click to select. <br />
+      Click to select.<br />
     </div>
     <select id="sky-select"></select>
 
@@ -244,6 +377,15 @@
             value="1.0"
             min="0.01"
           />
+        </div>
+
+        <div id="param-rotation" style="display:none">
+          <label>Rotation (degrees)</label>
+          <div class="field-row">
+            <input type="number" id="rot-x" step="5" value="0" placeholder="x" />
+            <input type="number" id="rot-y" step="5" value="0" placeholder="y" />
+            <input type="number" id="rot-z" step="5" value="0" placeholder="z" />
+          </div>
         </div>
 
         <label>Material</label>
@@ -289,7 +431,16 @@
       <option value="" selected disabled>Add object...</option>
       <option value="sphere">+ Sphere</option>
       <option value="cube">+ Cube</option>
+      <option value="stl">+ Mesh (STL)</option>
     </select>
+    <input type="file" id="stl-upload" accept=".stl" style="display:none" />
+
+    <button id="download-scene">Export .scene</button>
+
+    <div id="toast" class="toast hidden">
+      <button id="toast-close" class="toast-close">&times;</button>
+      <div id="toast-content"></div>
+    </div>
 
     <script type="module" src="index.js"></script>
   </body>

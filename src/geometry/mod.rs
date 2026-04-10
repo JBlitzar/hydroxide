@@ -1,9 +1,10 @@
-use crate::bvh::AABB;
+use crate::aabb::AABB;
 use crate::vec3::Vec3;
 use crate::{material::HitRecord, vec3::Ray};
 pub mod mesh;
 pub mod plane;
 pub mod sphere;
+pub mod triangle;
 
 pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, t_max: f64) -> Option<HitRecord<'_>>;

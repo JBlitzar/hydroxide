@@ -1,115 +1,11 @@
 use std::io::{Read, Seek};
 
 use crate::{
-    bvh::AABB,
-    geometry::Hittable,
+    aabb::AABB,
+    geometry::{Hittable, triangle::Triangle},
     material::{HitRecord, Material},
     vec3::{Ray, Vec3},
 };
-
-#[derive(Clone)]
-pub struct Triangle {
-    pub(crate) v0: Vec3,
-    pub(crate) v1: Vec3,
-    pub(crate) v2: Vec3,
-    pub normal: Vec3,
-    pub n0: Vec3,
-    pub n1: Vec3,
-    pub n2: Vec3,
-    pub e01: Vec3,
-    pub e02: Vec3,
-}
-
-impl Triangle {
-    pub fn new(v0: Vec3, v1: Vec3, v2: Vec3) -> Self {
-        Self::new_with_normals(v0, v1, v2, None, None, None)
-    }
-
-    pub fn new_with_normals(
-        v0: Vec3,
-        v1: Vec3,
-        v2: Vec3,
-        n0: Option<Vec3>,
-        n1: Option<Vec3>,
-        n2: Option<Vec3>,
-    ) -> Self {
-        let e01 = v1.sub(&v0);
-        let e02 = v2.sub(&v0);
-        let normal = e01.cross(&e02).normalize();
-        let n0 = n0.unwrap_or(normal);
-        let n1 = n1.unwrap_or(normal);
-        let n2 = n2.unwrap_or(normal);
-        Triangle {
-            v0,
-            v1,
-            v2,
-            normal,
-            n0,
-            n1,
-            n2,
-            e01,
-            e02,
-        }
-    }
-
-    fn hit<'a>(&self, ray: &Ray, material: &'a dyn Material) -> Option<HitRecord<'a>> {
-        // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html#:~:text=.-,Implementation,-Implementing%20the%20M%C3%B6ller
-        let v0v1 = self.e01;
-        let v0v2 = self.e02;
-        let pvec = ray.direction.cross(&v0v2);
-        let det = v0v1.dot(&pvec);
-        if det.abs() < 1e-8 {
-            return None;
-        }
-        let inv_det = 1.0 / det;
-
-        let tvec = ray.origin.sub(&self.v0);
-        let u = tvec.dot(&pvec) * inv_det;
-        if !(0.0..=1.0).contains(&u) {
-            return None;
-        }
-
-        let qvec = tvec.cross(&v0v1);
-        let v = ray.direction.dot(&qvec) * inv_det;
-        if v < 0.0 || u + v > 1.0 {
-            return None;
-        }
-
-        let t = v0v2.dot(&qvec) * inv_det;
-        if t < 0.001 {
-            return None;
-        }
-        let w = 1.0 - u - v;
-        let cross = self.e01.cross(&self.e02);
-        if cross.length_squared() < 1e-12 {
-            return None;
-        }
-        let geo_normal = cross.normalize();
-        let mut normal = self
-            .n0
-            .scalar_mul(w)
-            .add(&self.n1.scalar_mul(u))
-            .add(&self.n2.scalar_mul(v))
-            .normalize();
-        // Ensure interpolated normal is on the same side as the geometric normal
-        if normal.dot(&geo_normal) < 0.0 {
-            normal = normal.scalar_mul(-1.0);
-        }
-        // Flip both if ray hits from the back
-        let mut gn = geo_normal;
-        if ray.direction.dot(&geo_normal) > 0.0 {
-            normal = normal.scalar_mul(-1.0);
-            gn = gn.scalar_mul(-1.0);
-        }
-        Some(HitRecord {
-            point: ray.origin.add(&ray.direction.scalar_mul(t)),
-            normal,
-            geo_normal: gn,
-            material,
-            t,
-        })
-    }
-}
 
 pub struct MeshBVHNode {
     bbox: AABB,
@@ -127,11 +23,23 @@ pub struct MeshBVH {
 }
 
 impl MeshBVH {
+    pub fn triangles(&self) -> &[Triangle] {
+        &self.triangles
+    }
+
+    pub fn from_indexed(
+        positions: &[Vec3],
+        faces: &[[u32; 3]],
+        material: Box<dyn Material>,
+    ) -> Self {
+        Self::new(Self::triangles_from_indexed(positions, faces), material)
+    }
+
     pub fn with_material(&self, material: Box<dyn Material>) -> Self {
         Self::new(self.triangles.clone(), material)
     }
 
-    fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {
+    pub fn new(triangles: Vec<Triangle>, material: Box<dyn Material>) -> Self {
         let mut bvh = MeshBVH {
             nodes: Vec::new(),
             triangles,
@@ -157,56 +65,16 @@ impl MeshBVH {
 
         (raw_positions, raw_faces)
     }
-    fn triangles_from_stl_data(
-        raw_positions: Vec<Vec3>,
-        raw_faces: Vec<[usize; 3]>,
-        max_size: Option<f64>,
-        offset: Vec3,
-        rotation: Vec3,
-    ) -> Vec<Triangle> {
-        let offset = offset;
-        let rotation = rotation;
-
-        let raw_verts: Vec<[Vec3; 3]> = raw_faces
-            .iter()
-            .map(|idx| {
-                [
-                    raw_positions[idx[0]],
-                    raw_positions[idx[1]],
-                    raw_positions[idx[2]],
-                ]
-            })
-            .collect();
-
-        let scale = if let Some(max_size) = max_size {
-            let mut small = Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
-            let mut big = Vec3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
-            for [v0, v1, v2] in &raw_verts {
-                for v in [v0, v1, v2] {
-                    small.x = small.x.min(v.x);
-                    small.y = small.y.min(v.y);
-                    small.z = small.z.min(v.z);
-                    big.x = big.x.max(v.x);
-                    big.y = big.y.max(v.y);
-                    big.z = big.z.max(v.z);
-                }
-            }
-            let extent = (big.x - small.x).max(big.y - small.y).max(big.z - small.z);
-            max_size / extent
-        } else {
-            1.0
-        };
-
-        // Build smooth vertex normals by averaging adjacent face normals.
-        let mut normal_sums = vec![Vec3::ZERO; raw_positions.len()];
-        for [i0, i1, i2] in &raw_faces {
-            let v0 = raw_positions[*i0];
-            let v1 = raw_positions[*i1];
-            let v2 = raw_positions[*i2];
+    pub fn triangles_from_indexed(positions: &[Vec3], faces: &[[u32; 3]]) -> Vec<Triangle> {
+        let mut normal_sums = vec![Vec3::ZERO; positions.len()];
+        for [i0, i1, i2] in faces {
+            let v0 = positions[*i0 as usize];
+            let v1 = positions[*i1 as usize];
+            let v2 = positions[*i2 as usize];
             let face_n = v1.sub(&v0).cross(&v2.sub(&v0)).normalize();
-            normal_sums[*i0] = normal_sums[*i0].add(&face_n);
-            normal_sums[*i1] = normal_sums[*i1].add(&face_n);
-            normal_sums[*i2] = normal_sums[*i2].add(&face_n);
+            normal_sums[*i0 as usize] = normal_sums[*i0 as usize].add(&face_n);
+            normal_sums[*i1 as usize] = normal_sums[*i1 as usize].add(&face_n);
+            normal_sums[*i2 as usize] = normal_sums[*i2 as usize].add(&face_n);
         }
 
         let vertex_normals: Vec<Vec3> = normal_sums
@@ -220,29 +88,136 @@ impl MeshBVH {
             })
             .collect();
 
-        let triangles: Vec<Triangle> = raw_faces
-            .into_iter()
+        faces
+            .iter()
             .map(|[i0, i1, i2]| {
-                let v0 = raw_positions[i0];
-                let v1 = raw_positions[i1];
-                let v2 = raw_positions[i2];
-
-                let tv0 = v0.scalar_mul(scale).rotate(&rotation).add(&offset);
-                let tv1 = v1.scalar_mul(scale).rotate(&rotation).add(&offset);
-                let tv2 = v2.scalar_mul(scale).rotate(&rotation).add(&offset);
-
-                let tn0 = vertex_normals[i0].rotate(&rotation).normalize();
-                let tn1 = vertex_normals[i1].rotate(&rotation).normalize();
-                let tn2 = vertex_normals[i2].rotate(&rotation).normalize();
-
-                Triangle::new_with_normals(tv0, tv1, tv2, Some(tn0), Some(tn1), Some(tn2))
+                Triangle::new_with_normals(
+                    positions[*i0 as usize],
+                    positions[*i1 as usize],
+                    positions[*i2 as usize],
+                    Some(vertex_normals[*i0 as usize]),
+                    Some(vertex_normals[*i1 as usize]),
+                    Some(vertex_normals[*i2 as usize]),
+                )
             })
+            .collect()
+    }
+
+    fn transform_stl_data(
+        raw_positions: Vec<Vec3>,
+        raw_faces: Vec<[usize; 3]>,
+        max_size: Option<f64>,
+        offset: Vec3,
+        rotation: Vec3,
+    ) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+        let scale = if let Some(max_size) = max_size {
+            let mut small = Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
+            let mut big = Vec3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+            for pos in &raw_positions {
+                small.x = small.x.min(pos.x);
+                small.y = small.y.min(pos.y);
+                small.z = small.z.min(pos.z);
+                big.x = big.x.max(pos.x);
+                big.y = big.y.max(pos.y);
+                big.z = big.z.max(pos.z);
+            }
+            let extent = (big.x - small.x).max(big.y - small.y).max(big.z - small.z);
+            max_size / extent
+        } else {
+            1.0
+        };
+
+        let positions = raw_positions
+            .iter()
+            .map(|p| p.scalar_mul(scale).rotate(&rotation).add(&offset))
             .collect();
+        let faces = raw_faces
+            .iter()
+            .map(|[i0, i1, i2]| [*i0 as u32, *i1 as u32, *i2 as u32])
+            .collect();
+        (positions, faces)
+    }
 
-        #[cfg(debug_assertions)]
-        println!("Num triangles: {}", triangles.len());
+    fn triangles_from_stl_data(
+        raw_positions: Vec<Vec3>,
+        raw_faces: Vec<[usize; 3]>,
+        max_size: Option<f64>,
+        offset: Vec3,
+        rotation: Vec3,
+    ) -> Vec<Triangle> {
+        let (positions, faces) =
+            Self::transform_stl_data(raw_positions, raw_faces, max_size, offset, rotation);
+        Self::triangles_from_indexed(&positions, &faces)
+    }
 
-        triangles
+    #[cfg(feature = "native")]
+    pub fn load_stl_indexed(
+        path: &str,
+        max_size: Option<f64>,
+        offset: Option<Vec3>,
+        rotation: Option<Vec3>,
+    ) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+        let mut file = std::fs::File::open(path).expect("failed to open STL file");
+        let (pos, faces) = Self::parse_stl_read(&mut file);
+        Self::transform_stl_data(
+            pos,
+            faces,
+            max_size,
+            offset.unwrap_or(Vec3::ZERO),
+            rotation.unwrap_or(Vec3::ZERO),
+        )
+    }
+
+    pub fn load_stl_bytes_indexed(
+        data: &[u8],
+        max_size: Option<f64>,
+        offset: Option<Vec3>,
+        rotation: Option<Vec3>,
+    ) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+        let mut cursor = std::io::Cursor::new(data);
+        let (pos, faces) = Self::parse_stl_read(&mut cursor);
+        Self::transform_stl_data(
+            pos,
+            faces,
+            max_size,
+            offset.unwrap_or(Vec3::ZERO),
+            rotation.unwrap_or(Vec3::ZERO),
+        )
+    }
+
+    #[cfg(feature = "native")]
+    pub fn load_stl_triangles(
+        path: &str,
+        max_size: Option<f64>,
+        offset: Option<Vec3>,
+        rotation: Option<Vec3>,
+    ) -> Vec<Triangle> {
+        let mut file = std::fs::File::open(path).expect("failed to open STL file");
+        let (pos, faces) = Self::parse_stl_read(&mut file);
+        Self::triangles_from_stl_data(
+            pos,
+            faces,
+            max_size,
+            offset.unwrap_or(Vec3::ZERO),
+            rotation.unwrap_or(Vec3::ZERO),
+        )
+    }
+
+    pub fn load_stl_bytes_triangles(
+        data: &[u8],
+        max_size: Option<f64>,
+        offset: Option<Vec3>,
+        rotation: Option<Vec3>,
+    ) -> Vec<Triangle> {
+        let mut cursor = std::io::Cursor::new(data);
+        let (pos, faces) = Self::parse_stl_read(&mut cursor);
+        Self::triangles_from_stl_data(
+            pos,
+            faces,
+            max_size,
+            offset.unwrap_or(Vec3::ZERO),
+            rotation.unwrap_or(Vec3::ZERO),
+        )
     }
 
     #[cfg(feature = "native")]
@@ -253,15 +228,7 @@ impl MeshBVH {
         offset: Option<Vec3>,
         rotation: Option<Vec3>,
     ) -> Self {
-        let mut file = std::fs::File::open(path).expect("failed to open STL file");
-        let (pos, faces) = Self::parse_stl_read(&mut file);
-        let tris = Self::triangles_from_stl_data(
-            pos,
-            faces,
-            max_size,
-            offset.unwrap_or(Vec3::ZERO),
-            rotation.unwrap_or(Vec3::ZERO),
-        );
+        let tris = Self::load_stl_triangles(path, max_size, offset, rotation);
         MeshBVH::new(tris, material)
     }
 
@@ -272,19 +239,40 @@ impl MeshBVH {
         offset: Option<Vec3>,
         rotation: Option<Vec3>,
     ) -> Self {
-        let mut cursor = std::io::Cursor::new(data);
-        let (pos, faces) = Self::parse_stl_read(&mut cursor);
-        let tris = Self::triangles_from_stl_data(
-            pos,
-            faces,
-            max_size,
-            offset.unwrap_or(Vec3::ZERO),
-            rotation.unwrap_or(Vec3::ZERO),
-        );
+        let tris = Self::load_stl_bytes_triangles(data, max_size, offset, rotation);
         MeshBVH::new(tris, material)
     }
 
-    pub fn build_cube(center: Vec3, size: f64, material: Box<dyn Material>) -> Self {
+    pub fn cube_indexed(center: Vec3, size: f64) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+        let half = size / 2.0;
+        let positions = vec![
+            center.add(&Vec3::new(-half, -half, -half)),
+            center.add(&Vec3::new(half, -half, -half)),
+            center.add(&Vec3::new(half, half, -half)),
+            center.add(&Vec3::new(-half, half, -half)),
+            center.add(&Vec3::new(-half, -half, half)),
+            center.add(&Vec3::new(half, -half, half)),
+            center.add(&Vec3::new(half, half, half)),
+            center.add(&Vec3::new(-half, half, half)),
+        ];
+        let faces = vec![
+            [0, 1, 2],
+            [0, 2, 3],
+            [1, 5, 6],
+            [1, 6, 2],
+            [5, 4, 7],
+            [5, 7, 6],
+            [4, 0, 3],
+            [4, 3, 7],
+            [3, 2, 6],
+            [3, 6, 7],
+            [4, 5, 1],
+            [4, 1, 0],
+        ];
+        (positions, faces)
+    }
+
+    pub fn cube_triangles(center: Vec3, size: f64) -> Vec<Triangle> {
         let half = size / 2.0;
         let v0 = center.add(&Vec3::new(-half, -half, -half));
         let v1 = center.add(&Vec3::new(half, -half, -half));
@@ -295,7 +283,7 @@ impl MeshBVH {
         let v6 = center.add(&Vec3::new(half, half, half));
         let v7 = center.add(&Vec3::new(-half, half, half));
 
-        let triangles = vec![
+        vec![
             Triangle::new(v0, v1, v2),
             Triangle::new(v0, v2, v3),
             Triangle::new(v1, v5, v6),
@@ -308,9 +296,11 @@ impl MeshBVH {
             Triangle::new(v3, v6, v7),
             Triangle::new(v4, v5, v1),
             Triangle::new(v4, v1, v0),
-        ];
+        ]
+    }
 
-        MeshBVH::new(triangles, material)
+    pub fn build_cube(center: Vec3, size: f64, material: Box<dyn Material>) -> Self {
+        MeshBVH::new(Self::cube_triangles(center, size), material)
     }
 
     fn compute_bbox(&self, start: usize, end: usize) -> AABB {

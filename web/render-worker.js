@@ -1,4 +1,4 @@
-import init, { WasmRenderer, initThreadPool } from "./pkg/oxide.js";
+import init, { WasmRenderer, initThreadPool } from "./pkg/hydroxide.js";
 
 let renderer = null;
 let pendingMutations = [];
@@ -15,6 +15,9 @@ async function setup() {
 function applyMutation(msg) {
   if (!renderer) return;
   switch (msg.type) {
+    case "restore":
+      renderer.restore(msg.bytes);
+      break;
     case "set_sky":
       renderer.set_sky(msg.index);
       break;
@@ -30,6 +33,12 @@ function applyMutation(msg) {
     case "update_cube":
       renderer.update_cube(msg.index, msg.x, msg.y, msg.z, msg.size, msg.mat_type, msg.r, msg.g, msg.b, msg.fuzz, msg.ri);
       break;
+    case "update_mesh":
+      renderer.update_mesh(msg.index, msg.x, msg.y, msg.z, msg.size, msg.rx, msg.ry, msg.rz, msg.mat_type, msg.r, msg.g, msg.b, msg.fuzz, msg.ri);
+      break;
+    case "add_mesh_stl":
+      renderer.add_mesh_stl(msg.bytes, msg.x, msg.y, msg.z, msg.size, msg.mat_type, msg.r, msg.g, msg.b, msg.fuzz, msg.ri);
+      break;
     case "update_mesh_material":
       renderer.update_mesh_material(msg.index, msg.mat_type, msg.r, msg.g, msg.b, msg.fuzz, msg.ri);
       break;
@@ -38,6 +47,9 @@ function applyMutation(msg) {
       break;
     case "set_sky_hdr_bytes":
       renderer.set_sky_hdr_bytes(msg.bytes);
+      break;
+    case "set_sky_hdr":
+      renderer.set_sky_hdr(msg.hdr_index, msg.bytes);
       break;
   }
 }

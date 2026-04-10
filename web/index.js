@@ -1,4 +1,4 @@
-import init, { WasmRenderer, initThreadPool } from "./pkg/oxide.js";
+import init, { WasmRenderer, initThreadPool } from "./pkg/hydroxide.js";
 
 function isSafari(ua, vendor) {
   if (!vendor || !vendor.includes("Apple")) return false;
@@ -19,25 +19,20 @@ function blockUnsupported() {
   const blocked = isMobileDevice() || isSafari(ua, vendor);
   if (!blocked) return false;
 
-  const gh = "https://github.com/jblitzar/oxide";
-  document.body.innerHTML = "";
-  document.body.style.background = "#000";
-  document.body.style.color = "#fff";
-  document.body.style.overflow = "auto";
-  const wrap = document.createElement("div");
-  wrap.style.maxWidth = "720px";
-  wrap.style.margin = "64px auto";
-  wrap.style.padding = "0 16px";
-  wrap.style.fontFamily = "monospace";
-  wrap.innerHTML = `
-    <h1 style="font-size:18px; margin-bottom:12px;">Unsupported browser</h1>
-    <p style="color:#ccc; line-height:1.5; margin-bottom:12px;">
-      This web demo doesn’t work on mobile or Safari.
-      Please try Chrome or Firefox on desktop.
-    </p>
-    <p><a href="${gh}" target="_blank" rel="noreferrer" style="color:#fff; text-decoration:none;">Visit the GitHub repo</a></p>
-  `;
-  document.body.appendChild(wrap);
+  const gh = "https://github.com/jblitzar/hydroxide";
+  const info = document.getElementById("info");
+  if (info) {
+    info.innerHTML = `Unsupported on mobile/Safari. Please use Chrome/Firefox on desktop. <a href="${gh}" target="_blank" rel="noreferrer">[Github]</a>`;
+  }
+
+  const hints = document.querySelector(".i2");
+  if (hints) hints.style.display = "none";
+  const sky = document.getElementById("sky-select");
+  if (sky) sky.style.display = "none";
+  const add = document.getElementById("add-object");
+  if (add) add.style.display = "none";
+  const panel = document.getElementById("panel");
+  if (panel) panel.style.display = "none";
   return true;
 }
 
@@ -89,7 +84,9 @@ let workerReady = false;
 let workerBusy = false;
 let currentToken = 0;
 let currentPass = 0;
-let mutationLog = [];
+let lastHdrBytes = null;
+let lastHdrIndex = -1;
+let renderPaused = false;
 const workerUrl = new URL("./render-worker.js", import.meta.url);
 
 let spareWorker = null;
@@ -112,9 +109,14 @@ const matFuzz = document.getElementById("mat-fuzz");
 const matRI = document.getElementById("mat-ri");
 const fieldFuzz = document.getElementById("field-fuzz");
 const fieldRI = document.getElementById("field-ri");
+const paramRotation = document.getElementById("param-rotation");
+const rotX = document.getElementById("rot-x");
+const rotY = document.getElementById("rot-y");
+const rotZ = document.getElementById("rot-z");
 const btnApply = document.getElementById("btn-apply");
 const btnDelete = document.getElementById("btn-delete");
 const addObjectSelect = document.getElementById("add-object");
+const stlUpload = document.getElementById("stl-upload");
 
 function renderBaseSize() {
   return {
@@ -227,6 +229,7 @@ function drawOutlineOverlay() {
 }
 
 function displayFrame(rgba, w, h, label) {
+  if (renderPaused) return;
   const imgData = new ImageData(new Uint8ClampedArray(rgba), w, h);
   if (w < canvas.width || h < canvas.height) {
     const offscreen = new OffscreenCanvas(w, h);
@@ -239,8 +242,9 @@ function displayFrame(rgba, w, h, label) {
   }
   if (selectedIndex >= 0) drawOutlineOverlay();
   info.innerHTML =
-    "<a href='https://github.com/jblitzar/oxide' target='_blank'>[Github]</a> | " +
+    "<a href='https://github.com/jblitzar/hydroxide' target='_blank'>[Github]</a> | " +
     label;
+  drawGizmos();
 }
 
 function renderPreview() {
@@ -272,7 +276,7 @@ function renderPreview() {
 }
 
 function sendRender() {
-  if (!workerReady || isDragging) return;
+  if (!workerReady || isDragging || renderPaused) return;
   const [scale, samples, termProb] = PASSES[currentPass];
   const base = renderBaseSize();
   const w = Math.max(1, Math.floor(base.w * scale));
@@ -340,9 +344,21 @@ function onWorkerMessage(e) {
 }
 
 function sendWorkerMessage(msg) {
-  mutationLog.push(msg);
   if (qualityWorker) qualityWorker.postMessage(msg);
   if (spareWorker) spareWorker.postMessage(msg);
+}
+
+function syncWorkerState(worker) {
+  if (!mainRenderer) return;
+  const snap = mainRenderer.snapshot();
+  worker.postMessage({ type: "restore", bytes: snap });
+  if (lastHdrBytes && lastHdrIndex >= 0) {
+    worker.postMessage({
+      type: "set_sky_hdr",
+      hdr_index: lastHdrIndex,
+      bytes: lastHdrBytes,
+    });
+  }
 }
 
 function invalidateAndKick() {
@@ -352,6 +368,7 @@ function invalidateAndKick() {
 }
 
 function fullRerender() {
+  renderPaused = false;
   currentToken++;
   renderPreview();
   kick();
@@ -362,9 +379,11 @@ function warmSpare() {
   spareReady = false;
   spareWorker = new Worker(workerUrl, { type: "module" });
   spareWorker.onmessage = (e) => {
-    if (e.data.type === "ready") spareReady = true;
+    if (e.data.type === "ready") {
+      syncWorkerState(spareWorker);
+      spareReady = true;
+    }
   };
-  for (const msg of mutationLog) spareWorker.postMessage(msg);
 }
 
 function spawnWorker() {
@@ -382,8 +401,14 @@ function spawnWorker() {
     workerReady = false;
     workerBusy = false;
     qualityWorker = new Worker(workerUrl, { type: "module" });
-    qualityWorker.onmessage = onWorkerMessage;
-    for (const msg of mutationLog) qualityWorker.postMessage(msg);
+    qualityWorker.onmessage = (e) => {
+      if (e.data.type === "ready") {
+        syncWorkerState(qualityWorker);
+        qualityWorker.onmessage = onWorkerMessage;
+        workerReady = true;
+        if (!isDragging) kick();
+      }
+    };
   }
 }
 
@@ -426,13 +451,18 @@ skySelect.addEventListener("change", async () => {
   if (val.startsWith("builtin:")) {
     const idx = parseInt(val.split(":")[1]);
     mainRenderer.set_sky(idx);
+    lastHdrBytes = null;
+    lastHdrIndex = -1;
     sendWorkerMessage({ type: "set_sky", index: idx });
     fullRerender();
   } else if (val.startsWith("hdr:")) {
     const url = val.split(":").slice(1).join(":");
+    const hdrIdx = HDR_SKIES.findIndex((h) => h.url === url);
     const bytes = await loadHdrSky(url);
-    mainRenderer.set_sky_hdr_bytes(bytes);
-    sendWorkerMessage({ type: "set_sky_hdr_bytes", bytes });
+    mainRenderer.set_sky_hdr(hdrIdx, bytes);
+    lastHdrBytes = bytes;
+    lastHdrIndex = hdrIdx;
+    sendWorkerMessage({ type: "set_sky_hdr", hdr_index: hdrIdx, bytes });
     fullRerender();
   }
 });
@@ -448,6 +478,7 @@ function selectObject(index) {
     panel.classList.remove("open");
     panelContent.classList.remove("active");
   }
+  drawGizmos();
 }
 
 function deselect() {
@@ -521,14 +552,20 @@ btnApply.addEventListener("click", () => {
       fuzz,
       ri,
     });
-  } else if (selectedObjType === 1) {
+  } else {
     const size = parseFloat(objSize.value) || 1.0;
-    mainRenderer.update_cube(
+    const rx = (parseFloat(rotX.value) || 0) * DEG2RAD;
+    const ry = (parseFloat(rotY.value) || 0) * DEG2RAD;
+    const rz = (parseFloat(rotZ.value) || 0) * DEG2RAD;
+    mainRenderer.update_mesh(
       selectedIndex,
       x,
       y,
       z,
       size,
+      rx,
+      ry,
+      rz,
       mt,
       r,
       g,
@@ -537,24 +574,15 @@ btnApply.addEventListener("click", () => {
       ri,
     );
     sendWorkerMessage({
-      type: "update_cube",
+      type: "update_mesh",
       index: selectedIndex,
       x,
       y,
       z,
       size,
-      mat_type: mt,
-      r,
-      g,
-      b,
-      fuzz,
-      ri,
-    });
-  } else {
-    mainRenderer.update_mesh_material(selectedIndex, mt, r, g, b, fuzz, ri);
-    sendWorkerMessage({
-      type: "update_mesh_material",
-      index: selectedIndex,
+      rx,
+      ry,
+      rz,
       mat_type: mt,
       r,
       g,
@@ -615,6 +643,9 @@ addObjectSelect.addEventListener("change", () => {
       fuzz: 0,
       ri: 1.5,
     });
+  } else if (val === "stl") {
+    stlUpload.click();
+    return;
   } else {
     return;
   }
@@ -626,14 +657,254 @@ addObjectSelect.addEventListener("change", () => {
   safeComputeOutline();
 });
 
+stlUpload.addEventListener("change", async () => {
+  const file = stlUpload.files[0];
+  stlUpload.value = "";
+  if (!file || !mainRenderer) return;
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const x = 0;
+  const y = 1.0;
+  const z = -5;
+  const idx = mainRenderer.add_mesh_stl(
+    buf,
+    x,
+    y,
+    z,
+    2.0,
+    0,
+    0.5,
+    0.5,
+    0.8,
+    0,
+    1.5,
+  );
+  sendWorkerMessage({
+    type: "add_mesh_stl",
+    bytes: buf,
+    x,
+    y,
+    z,
+    size: 2.0,
+    mat_type: 0,
+    r: 0.5,
+    g: 0.5,
+    b: 0.8,
+    fuzz: 0,
+    ri: 1.5,
+  });
+  selectedIndex = idx;
+  panel.classList.add("open");
+  panelContent.classList.add("active");
+  loadObjectToPanel(idx);
+  fullRerender();
+  safeComputeOutline();
+});
+
+const RAD2DEG = 180 / Math.PI;
+const DEG2RAD = Math.PI / 180;
+
+// --- Gizmo widget ---
+const gizmoWidget = document.getElementById("gizmo-widget");
+const gizmoPad = document.getElementById("gizmo-pad");
+const gpc = gizmoPad.getContext("2d");
+const gizmoTranslateBtn = document.getElementById("gizmo-translate");
+const gizmoRotateBtn = document.getElementById("gizmo-rotate");
+let gizmoMode = "translate";
+let gizmoDragAxis = null;
+let gizmoDragStartY = 0;
+let gizmoDragStartNfo = null;
+const AXIS_COLORS = { x: "#e44", y: "#4e4", z: "#48f" };
+const AXIS_LABELS = { x: "X", y: "Y", z: "Z" };
+const PAD_W = 120, PAD_H = 120;
+
+gizmoTranslateBtn.addEventListener("click", () => {
+  gizmoMode = "translate";
+  gizmoTranslateBtn.classList.add("active");
+  gizmoRotateBtn.classList.remove("active");
+  drawGizmoPad();
+});
+gizmoRotateBtn.addEventListener("click", () => {
+  gizmoMode = "rotate";
+  gizmoRotateBtn.classList.add("active");
+  gizmoTranslateBtn.classList.remove("active");
+  drawGizmoPad();
+});
+
+function showGizmoWidget() {
+  const hasMesh = selectedObjType === 1 || selectedObjType === 2;
+  if (gizmoMode === "rotate" && !hasMesh) gizmoMode = "translate";
+  gizmoRotateBtn.style.display = hasMesh ? "" : "none";
+  gizmoTranslateBtn.classList.toggle("active", gizmoMode === "translate");
+  gizmoRotateBtn.classList.toggle("active", gizmoMode === "rotate");
+  gizmoWidget.style.display = "block";
+  drawGizmoPad();
+}
+
+function hideGizmoWidget() {
+  gizmoWidget.style.display = "none";
+}
+
+function drawGizmoPad() {
+  gpc.clearRect(0, 0, PAD_W, PAD_H);
+  const axes = ["x", "y", "z"];
+  const barW = 28, gap = 10;
+  const totalW = axes.length * barW + (axes.length - 1) * gap;
+  const startX = (PAD_W - totalW) / 2;
+
+  for (let i = 0; i < axes.length; i++) {
+    const a = axes[i];
+    const x = startX + i * (barW + gap);
+    const active = gizmoDragAxis === a;
+
+    if (gizmoMode === "translate") {
+      // vertical bar with arrow
+      gpc.fillStyle = active ? AXIS_COLORS[a] : "#222";
+      gpc.strokeStyle = AXIS_COLORS[a];
+      gpc.lineWidth = 1;
+      gpc.beginPath();
+      gpc.roundRect(x, 20, barW, PAD_H - 40, 4);
+      gpc.fill();
+      gpc.stroke();
+      // arrow up
+      gpc.beginPath();
+      gpc.moveTo(x + barW / 2, 12);
+      gpc.lineTo(x + barW / 2 - 6, 22);
+      gpc.lineTo(x + barW / 2 + 6, 22);
+      gpc.closePath();
+      gpc.fillStyle = AXIS_COLORS[a];
+      gpc.fill();
+      // arrow down
+      gpc.beginPath();
+      gpc.moveTo(x + barW / 2, PAD_H - 12);
+      gpc.lineTo(x + barW / 2 - 6, PAD_H - 22);
+      gpc.lineTo(x + barW / 2 + 6, PAD_H - 22);
+      gpc.closePath();
+      gpc.fill();
+    } else {
+      // arc for rotation
+      const cx = x + barW / 2, cy = PAD_H / 2, r = 30;
+      gpc.beginPath();
+      gpc.arc(cx, cy, r, -Math.PI * 0.8, Math.PI * 0.8);
+      gpc.strokeStyle = AXIS_COLORS[a];
+      gpc.lineWidth = active ? 4 : 2.5;
+      gpc.stroke();
+      // arrow tips on arc ends
+      const drawTip = (angle, dir) => {
+        const tx = cx + r * Math.cos(angle);
+        const ty = cy + r * Math.sin(angle);
+        const ta = angle + dir * Math.PI / 2;
+        gpc.beginPath();
+        gpc.moveTo(tx + 5 * Math.cos(ta - 0.5), ty + 5 * Math.sin(ta - 0.5));
+        gpc.lineTo(tx, ty);
+        gpc.lineTo(tx + 5 * Math.cos(ta + 0.5), ty + 5 * Math.sin(ta + 0.5));
+        gpc.strokeStyle = AXIS_COLORS[a];
+        gpc.lineWidth = 2;
+        gpc.stroke();
+      };
+      drawTip(-Math.PI * 0.8, -1);
+      drawTip(Math.PI * 0.8, 1);
+    }
+    // label
+    gpc.fillStyle = "#fff";
+    gpc.font = "bold 11px monospace";
+    gpc.textAlign = "center";
+    gpc.fillText(AXIS_LABELS[a], x + barW / 2, PAD_H / 2 + 4);
+  }
+}
+
+function gizmoPadHitAxis(ex, ey) {
+  const rect = gizmoPad.getBoundingClientRect();
+  const lx = ex - rect.left, ly = ey - rect.top;
+  const axes = ["x", "y", "z"];
+  const barW = 28, gap = 10;
+  const totalW = axes.length * barW + (axes.length - 1) * gap;
+  const startX = (PAD_W - totalW) / 2;
+  for (let i = 0; i < axes.length; i++) {
+    const x = startX + i * (barW + gap);
+    if (lx >= x && lx <= x + barW && ly >= 8 && ly <= PAD_H - 8)
+      return axes[i];
+  }
+  return null;
+}
+
+function applyGizmoWidgetDrag(axis, dy) {
+  if (selectedIndex < 0 || !mainRenderer || !gizmoDragStartNfo) return;
+  const nfo = gizmoDragStartNfo;
+  const worldScale = distance * 0.005;
+
+  if (gizmoMode === "translate") {
+    const delta = -dy * worldScale;
+    const nx = axis === "x" ? nfo[1] + delta : nfo[1];
+    const ny = axis === "y" ? nfo[2] + delta : nfo[2];
+    const nz = axis === "z" ? nfo[3] + delta : nfo[3];
+
+    if (selectedObjType === 0) {
+      mainRenderer.update_sphere(selectedIndex, nx, ny, nz, nfo[4], Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
+      sendWorkerMessage({ type: "update_sphere", index: selectedIndex, x: nx, y: ny, z: nz, radius: nfo[4], mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+    } else {
+      mainRenderer.update_mesh(selectedIndex, nx, ny, nz, nfo[4], nfo[11], nfo[12], nfo[13], Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
+      sendWorkerMessage({ type: "update_mesh", index: selectedIndex, x: nx, y: ny, z: nz, size: nfo[4], rx: nfo[11], ry: nfo[12], rz: nfo[13], mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+    }
+  } else {
+    if (selectedObjType === 0) return;
+    const rotDelta = -dy * 0.02;
+    const rx = axis === "x" ? nfo[11] + rotDelta : nfo[11];
+    const ry = axis === "y" ? nfo[12] + rotDelta : nfo[12];
+    const rz = axis === "z" ? nfo[13] + rotDelta : nfo[13];
+    mainRenderer.update_mesh(selectedIndex, nfo[1], nfo[2], nfo[3], nfo[4], rx, ry, rz, Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
+    sendWorkerMessage({ type: "update_mesh", index: selectedIndex, x: nfo[1], y: nfo[2], z: nfo[3], size: nfo[4], rx, ry, rz, mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+  }
+  renderPreview();
+  loadObjectToPanel(selectedIndex);
+}
+
+gizmoPad.addEventListener("mousedown", (e) => {
+  if (selectedIndex < 0 || !mainRenderer) return;
+  const axis = gizmoPadHitAxis(e.clientX, e.clientY);
+  if (!axis) return;
+  e.preventDefault();
+  e.stopPropagation();
+  gizmoDragAxis = axis;
+  gizmoDragStartY = e.clientY;
+  gizmoDragStartNfo = Array.from(mainRenderer.get_object_info(selectedIndex));
+  drawGizmoPad();
+
+  const onMove = (ev) => {
+    const dy = ev.clientY - gizmoDragStartY;
+    applyGizmoWidgetDrag(gizmoDragAxis, dy);
+    drawGizmoPad();
+  };
+  const onUp = () => {
+    gizmoDragAxis = null;
+    gizmoDragStartNfo = null;
+    drawGizmoPad();
+    safeComputeOutline();
+    kick();
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+  };
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+});
+
+function drawGizmos() {
+  if (selectedIndex >= 0 && !renderPaused) {
+    showGizmoWidget();
+  } else {
+    hideGizmoWidget();
+  }
+}
+
 function loadObjectToPanel(index) {
   if (!mainRenderer) return;
   const nfo = mainRenderer.get_object_info(index);
-  if (!nfo || nfo.length < 11) return;
+  if (!nfo || nfo.length < 14) return;
 
   selectedObjType = nfo[0];
   const isMesh = selectedObjType === 2;
   const isSphere = selectedObjType === 0;
+  const isCube = selectedObjType === 1;
+  const hasMeshVerts = isMesh || isCube;
 
   posX.value = nfo[1].toFixed(2);
   posY.value = nfo[2].toFixed(2);
@@ -646,8 +917,9 @@ function loadObjectToPanel(index) {
     paramSize.style.display = "none";
   } else if (isMesh) {
     objType.value = "mesh";
+    objSize.value = nfo[4].toFixed(2);
     paramRadius.style.display = "none";
-    paramSize.style.display = "none";
+    paramSize.style.display = "block";
   } else {
     objType.value = "cube";
     objSize.value = nfo[4].toFixed(2);
@@ -655,16 +927,15 @@ function loadObjectToPanel(index) {
     paramSize.style.display = "block";
   }
 
+  paramRotation.style.display = hasMeshVerts ? "block" : "none";
+  rotX.value = (nfo[11] * RAD2DEG).toFixed(1);
+  rotY.value = (nfo[12] * RAD2DEG).toFixed(1);
+  rotZ.value = (nfo[13] * RAD2DEG).toFixed(1);
+
   objType.disabled = isMesh;
-  posX.disabled = isMesh;
-  posY.disabled = isMesh;
-  posZ.disabled = isMesh;
-  if (!isMesh) {
-    objType.disabled = false;
-    posX.disabled = false;
-    posY.disabled = false;
-    posZ.disabled = false;
-  }
+  posX.disabled = false;
+  posY.disabled = false;
+  posZ.disabled = false;
 
   matType.value = String(Math.round(nfo[5]));
   matColor.value = rgbToHex(nfo[6], nfo[7], nfo[8]);
@@ -756,6 +1027,87 @@ canvas.addEventListener(
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") deselect();
 });
+
+const downloadBtn = document.getElementById("download-scene");
+const toast = document.getElementById("toast");
+const toastContent = document.getElementById("toast-content");
+const toastClose = document.getElementById("toast-close");
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const prev = btn.textContent;
+    btn.textContent = "ok";
+    setTimeout(() => (btn.textContent = prev), 1000);
+  });
+}
+
+function showExportToast() {
+  const isWin = navigator.platform.indexOf("Win") > -1;
+  const cdCmd = isWin ? "cd %USERPROFILE%\\Downloads" : "cd ~/Downloads";
+  const steps = [
+    { label: "Install", cmd: "cargo install hydroxide" },
+    { label: "Navigate", cmd: cdCmd },
+    {
+      label: "Render",
+      cmd: "hydroxide --scene exported.scene -s 1000 --width 1920 --height 1080",
+    },
+  ];
+  toastContent.innerHTML =
+    "<div style='color:#fff;margin-bottom:6px'>Scene downloaded!</div>";
+  for (const s of steps) {
+    const row = document.createElement("div");
+    row.className = "toast-step";
+    const code = document.createElement("code");
+    code.textContent = s.cmd;
+    code.title = s.cmd;
+    const btn = document.createElement("button");
+    btn.className = "toast-copy";
+    btn.textContent = "copy";
+    btn.addEventListener("click", () => copyText(s.cmd, btn));
+    row.appendChild(code);
+    row.appendChild(btn);
+    toastContent.appendChild(row);
+  }
+  toast.classList.remove("hidden");
+}
+
+downloadBtn.addEventListener("click", () => {
+  if (!mainRenderer) return;
+  const cam = cameraFromOrbit();
+  const bytes = mainRenderer.export_scene(
+    1920,
+    1080,
+    FOV,
+    cam.x,
+    cam.y,
+    cam.z,
+    target.x,
+    target.y,
+    target.z,
+    focusDistance,
+    APERTURE,
+    500,
+    0.01,
+  );
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "exported.scene";
+  a.click();
+  URL.revokeObjectURL(url);
+  renderPaused = true;
+  currentToken++;
+  info.innerHTML =
+    "<a id='resume-link' href='#' style='color:#ff0;text-decoration:underline;cursor:pointer'>paused for local render, click to resume</a>";
+  document.getElementById("resume-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    fullRerender();
+  });
+  showExportToast();
+});
+
+toastClose.addEventListener("click", () => toast.classList.add("hidden"));
 
 async function main() {
   await init();

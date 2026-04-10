@@ -1,5 +1,5 @@
 use crate::{
-    bvh::AABB,
+    aabb::AABB,
     geometry::Hittable,
     material::{HitRecord, Material},
     vec3::{Ray, Vec3},
