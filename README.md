@@ -41,6 +41,17 @@ hydroxide # Runs a demo, or --help to view options
 
 [Full devlog ->](DEVLOG.md)
 
+## Physics
+
+Graphics programming is inherently physics-based, but even more so for path tracing. More than simple pinhole camera math used for rasterization, the whole point is to simulate the physics of light. The random bouncing off of lambertians and schlick approximation for dielectrics etc all model real-world light behavior.
+
+A couple discrepancies:
+True colored light has slightly different wavelengths that respond differently. You can get cool effects like chromatic aberration. Unfortunately for computers, this would mean doing 3x the work, so all light has an intrinsic Vec3 color.
+
+Light actually originates from the sun and hits our eyes, but this does the opposite. This is because the alternative would be super inefficient! This is why this is sometimes called "reverse path tracing." It makes sure every ray coming from a pixel definitely contributes to the image.
+
+Read up more at https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials
+
 ## Optimization
 
 A path tracer is a very computationally heavy task, and deploying to the web on CPU is like shooting yourself in the foot twice.
