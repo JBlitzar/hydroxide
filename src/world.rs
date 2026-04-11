@@ -15,7 +15,7 @@ use crate::vec3::Vec3;
 pub struct World {
     camera: Camera,
     objects: BVHNode,
-    scene_objects: Vec<Arc<dyn Hittable>>,
+    pub scene_objects: Vec<Arc<dyn Hittable>>,
     lights: Vec<SphereLight>,
     sky: Box<dyn Sky>,
     selection_mask: Vec<u8>,

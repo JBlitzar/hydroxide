@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     aabb::AABB,
     camera::Camera,
     geometry::{Hittable, HittableList},
+    gpu::ObjectKey,
     material::HitRecord,
     vec3::{Ray, Vec3},
 };
@@ -219,5 +220,119 @@ impl BVHNode {
         let box_a = a.bounding_box();
         let box_b = b.bounding_box();
         box_a.min[axis].partial_cmp(&box_b.min[axis]).unwrap()
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct FlatBVHNode {
+    pub min: [f32; 3],
+    pub _pad0: f32,
+    pub max: [f32; 3],
+    pub _pad1: f32,
+    pub left: u32,
+    pub right: u32,
+    pub is_leaf: u32,
+    pub object_type: u32, // 0=sphere, 1=mesh, 2=plane
+    pub object_index: u32,
+    pub _pad2: [u32; 3],
+}
+
+impl BVHNode {
+    /// Linearize the tree into a flat array via pre-order traversal.
+    /// Returns (flat_nodes, mapping from Arc<dyn Hittable> -> object index).
+    pub fn flatten(&self) -> (Vec<FlatBVHNode>, std::collections::HashMap<ObjectKey, u32>) {
+        let mut flat_nodes = Vec::new();
+        let mut object_index_map = std::collections::HashMap::new();
+
+        // lwk just call it recursively
+        self._flatten(&mut flat_nodes, &mut object_index_map);
+
+        (flat_nodes, object_index_map)
+    }
+
+    fn emit_leaf_node(
+        obj: &Arc<dyn Hittable>,
+        flat_nodes: &mut Vec<FlatBVHNode>,
+        object_index_map: &mut HashMap<ObjectKey, u32>,
+    ) -> u32 {
+        let idx = flat_nodes.len() as u32;
+        let bbox = obj.bounding_box();
+
+        let key = ObjectKey::of(obj);
+        let next_index = object_index_map.len() as u32;
+        let object_index = *object_index_map.entry(key).or_insert(next_index);
+
+        flat_nodes.push(FlatBVHNode {
+            min: bbox.min.to_f32_array(),
+            _pad0: 0.0,
+            max: bbox.max.to_f32_array(),
+            _pad1: 0.0,
+            left: 0,
+            right: 0,
+            is_leaf: 1,
+            object_type: Self::get_object_type(obj),
+            object_index,
+            _pad2: [0; 3],
+        });
+
+        idx
+    }
+
+    fn _flatten(
+        &self,
+        flat_nodes: &mut Vec<FlatBVHNode>,
+        object_index_map: &mut HashMap<ObjectKey, u32>,
+    ) -> u32 {
+        let this_idx = flat_nodes.len() as u32;
+
+        flat_nodes.push(FlatBVHNode {
+            min: self.bbox.min.to_f32_array(),
+            _pad0: 0.0,
+            max: self.bbox.max.to_f32_array(),
+            _pad1: 0.0,
+            left: 0,
+            right: 0,
+
+            is_leaf: 0,
+            object_type: 0,
+            object_index: 0,
+            _pad2: [0; 3],
+        });
+
+        let left_idx = if self.left.is_leaf() {
+            Self::emit_leaf_node(&self.left, flat_nodes, object_index_map)
+        } else {
+            self.left
+                .as_any()
+                .downcast_ref::<BVHNode>()
+                .expect("Non-leaf left child is not BVHNode")
+                ._flatten(flat_nodes, object_index_map)
+        };
+
+        let right_idx = if self.right.is_leaf() {
+            Self::emit_leaf_node(&self.right, flat_nodes, object_index_map)
+        } else {
+            self.right
+                .as_any()
+                .downcast_ref::<BVHNode>()
+                .expect("Non-leaf right child is not BVHNode")
+                ._flatten(flat_nodes, object_index_map)
+        };
+        flat_nodes[this_idx as usize].left = left_idx;
+        flat_nodes[this_idx as usize].right = right_idx;
+        this_idx
+    }
+
+    fn get_object_type(obj: &Arc<dyn Hittable>) -> u32 {
+        if obj.as_any().is::<crate::geometry::sphere::Sphere>() {
+            0
+        } else if obj.as_any().is::<crate::geometry::mesh::MeshBVH>() {
+            1
+        } else if obj.as_any().is::<crate::geometry::plane::Plane>() {
+            2
+        } else {
+            panic!("Unknown object type in BVHNode");
+        }
     }
 }

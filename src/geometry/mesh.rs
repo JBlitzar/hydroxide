@@ -3,6 +3,7 @@ use std::io::{Read, Seek};
 use crate::{
     aabb::AABB,
     geometry::{Hittable, triangle::Triangle},
+    gpu::ObjectKey,
     material::{HitRecord, Material},
     vec3::{Ray, Vec3},
 };
@@ -13,6 +14,12 @@ pub struct MeshBVHNode {
     right: usize,
     is_leaf: bool,
     triangle_index: usize,
+}
+
+impl MeshBVHNode {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 pub struct MeshBVH {
@@ -401,6 +408,162 @@ impl Hittable for MeshBVH {
             AABB::new(Vec3::ZERO, Vec3::ZERO)
         } else {
             self.nodes[self.root].bbox.clone()
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct FlatMeshBVHNode {
+    pub min: [f32; 3],
+    pub _pad0: f32,
+    pub max: [f32; 3],
+    pub _pad1: f32,
+    pub left: u32,
+    pub right: u32,
+    pub is_leaf: u32,
+    pub tri_index: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuTriangle {
+    pub v0: [f32; 4], // xyz + pad
+    pub v1: [f32; 4],
+    pub v2: [f32; 4],
+    pub n0: [f32; 4],
+    pub n1: [f32; 4],
+    pub n2: [f32; 4],
+    pub e01: [f32; 4],
+    pub e02: [f32; 4],
+}
+
+impl MeshBVH {
+    pub fn flatten(
+        &self,
+    ) -> (
+        Vec<FlatMeshBVHNode>,
+        std::collections::HashMap<usize, u32>,
+        Vec<GpuTriangle>,
+    ) {
+        let mut flat_nodes = Vec::new();
+        let mut object_index_map = std::collections::HashMap::new();
+        let mut gpu_triangles = Vec::new();
+        for tri in &self.triangles {
+            gpu_triangles.push(GpuTriangle {
+                v0: [tri.v0.x as f32, tri.v0.y as f32, tri.v0.z as f32, 0.0],
+                v1: [tri.v1.x as f32, tri.v1.y as f32, tri.v1.z as f32, 0.0],
+                v2: [tri.v2.x as f32, tri.v2.y as f32, tri.v2.z as f32, 0.0],
+                n0: [tri.n0.x as f32, tri.n0.y as f32, tri.n0.z as f32, 0.0],
+                n1: [tri.n1.x as f32, tri.n1.y as f32, tri.n1.z as f32, 0.0],
+                n2: [tri.n2.x as f32, tri.n2.y as f32, tri.n2.z as f32, 0.0],
+                e01: [
+                    (tri.v1.x - tri.v0.x) as f32,
+                    (tri.v1.y - tri.v0.y) as f32,
+                    (tri.v1.z - tri.v0.z) as f32,
+                    0.0,
+                ],
+                e02: [
+                    (tri.v2.x - tri.v0.x) as f32,
+                    (tri.v2.y - tri.v0.y) as f32,
+                    (tri.v2.z - tri.v0.z) as f32,
+                    0.0,
+                ],
+            });
+        }
+
+        // lwk just call it recursively
+        self._flatten(&mut flat_nodes, &mut object_index_map);
+
+        (flat_nodes, object_index_map, gpu_triangles)
+    }
+
+    fn _flatten(
+        &self,
+        flat_nodes: &mut Vec<FlatMeshBVHNode>,
+        object_index_map: &mut std::collections::HashMap<usize, u32>,
+    ) {
+        let node = &self.nodes[self.root];
+        if node.is_leaf {
+            let tri_index = node.triangle_index as u32;
+            let object_key = tri_index as usize;
+            let next_index = object_index_map.len() as u32;
+            let _object_index = *object_index_map.entry(object_key).or_insert(next_index);
+
+            flat_nodes.push(FlatMeshBVHNode {
+                min: node.bbox.min.to_f32_array(),
+                _pad0: 0.0,
+                max: node.bbox.max.to_f32_array(),
+                _pad1: 0.0,
+                left: 0,
+                right: 0,
+                is_leaf: 1,
+                tri_index,
+            });
+        } else {
+            let this_index = flat_nodes.len() as u32;
+            flat_nodes.push(FlatMeshBVHNode {
+                min: node.bbox.min.to_f32_array(),
+                _pad0: 0.0,
+                max: node.bbox.max.to_f32_array(),
+                _pad1: 0.0,
+                left: 0,
+                right: 0,
+                is_leaf: 0,
+                tri_index: 0,
+            });
+
+            fn flatten_subtree(
+                mesh: &MeshBVH,
+                idx: usize,
+                flat_nodes: &mut Vec<FlatMeshBVHNode>,
+                object_index_map: &mut std::collections::HashMap<usize, u32>,
+            ) -> u32 {
+                let node = &mesh.nodes[idx];
+                let out_idx = flat_nodes.len() as u32;
+
+                if node.is_leaf {
+                    let tri_index = node.triangle_index as u32;
+                    let object_key = tri_index as usize;
+                    let next_index = object_index_map.len() as u32;
+                    let _object_index = *object_index_map.entry(object_key).or_insert(next_index);
+
+                    flat_nodes.push(FlatMeshBVHNode {
+                        min: node.bbox.min.to_f32_array(),
+                        _pad0: 0.0,
+                        max: node.bbox.max.to_f32_array(),
+                        _pad1: 0.0,
+                        left: 0,
+                        right: 0,
+                        is_leaf: 1,
+                        tri_index,
+                    });
+                    return out_idx;
+                }
+
+                flat_nodes.push(FlatMeshBVHNode {
+                    min: node.bbox.min.to_f32_array(),
+                    _pad0: 0.0,
+                    max: node.bbox.max.to_f32_array(),
+                    _pad1: 0.0,
+                    left: 0,
+                    right: 0,
+                    is_leaf: 0,
+                    tri_index: 0,
+                });
+
+                let left = flatten_subtree(mesh, node.left, flat_nodes, object_index_map);
+                let right = flatten_subtree(mesh, node.right, flat_nodes, object_index_map);
+                flat_nodes[out_idx as usize].left = left;
+                flat_nodes[out_idx as usize].right = right;
+
+                out_idx
+            }
+
+            let left = flatten_subtree(self, node.left, flat_nodes, object_index_map);
+            let right = flatten_subtree(self, node.right, flat_nodes, object_index_map);
+            flat_nodes[this_index as usize].left = left;
+            flat_nodes[this_index as usize].right = right;
         }
     }
 }

@@ -3,6 +3,7 @@ mod bluenoise;
 mod bvh;
 mod camera;
 mod geometry;
+mod gpu;
 mod light;
 mod material;
 mod renderer;

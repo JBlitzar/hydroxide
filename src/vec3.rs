@@ -151,6 +151,14 @@ impl Vec3 {
         y: 0.0,
         z: 0.0,
     };
+
+    pub fn to_array(&self) -> [f64; 3] {
+        [self.x, self.y, self.z]
+    }
+
+    pub fn to_f32_array(&self) -> [f32; 3] {
+        [self.x as f32, self.y as f32, self.z as f32]
+    }
 }
 
 #[derive(Copy, Clone)]

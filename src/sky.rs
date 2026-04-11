@@ -10,6 +10,10 @@ pub trait Sky: Send + Sync {
     fn lights(&self) -> Vec<SphereLight> {
         vec![]
     }
+    fn id(&self) -> usize {
+        0
+    }
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 pub struct GradientSky {
     pub top_color: Vec3,
@@ -22,6 +26,12 @@ impl Sky for GradientSky {
             .scalar_mul(1.0 - t)
             .add(&self.top_color.scalar_mul(t))
     }
+    fn id(&self) -> usize {
+        1
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 pub struct SolidColorSky {
@@ -30,6 +40,12 @@ pub struct SolidColorSky {
 impl Sky for SolidColorSky {
     fn color(&self, _ray: &Ray) -> Vec3 {
         self.color
+    }
+    fn id(&self) -> usize {
+        0
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -47,6 +63,9 @@ impl Sky for HDRSky {
         let x = (u * self.width as f64) as usize % self.width;
         let y = (v * self.height as f64) as usize % self.height;
         self.data[y * self.width + x].scalar_mul(self.exposure)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 impl HDRSky {
@@ -106,5 +125,12 @@ impl HDRSky {
             height,
             exposure: 1.0,
         }
+    }
+
+    fn id(&self) -> usize {
+        3
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

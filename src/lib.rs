@@ -3,6 +3,7 @@ pub mod bluenoise;
 pub mod bvh;
 pub mod camera;
 pub mod geometry;
+pub mod gpu;
 pub mod light;
 pub mod material;
 pub mod renderer;
