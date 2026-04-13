@@ -4,7 +4,7 @@
 
 ### Run it online!
 
-[hydroxide.pages.dev](https://hydroxide.pages.dev/)
+[hydroxide-eight.vercel.app/](hydroxide-eight.vercel.app/)
 
 A physically accurate CPU path tracer written in Rust. Compiles to WASM.
 
