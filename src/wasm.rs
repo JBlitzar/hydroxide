@@ -601,13 +601,24 @@ impl WasmRenderer {
     }
 
     pub fn snapshot(&self) -> Vec<u8> {
-        bincode::serialize(&(&self.objects, &self.kinds, &self.rotations, &self.base_verts, &self.sky))
-            .expect("snapshot serialize")
+        bincode::serialize(&(
+            &self.objects,
+            &self.kinds,
+            &self.rotations,
+            &self.base_verts,
+            &self.sky,
+        ))
+        .expect("snapshot serialize")
     }
 
     pub fn restore(&mut self, bytes: &[u8]) {
-        let (objects, kinds, rotations, base_verts, sky): (Vec<ObjectDesc>, Vec<ObjectKind>, Vec<Vec3>, Vec<Option<Vec<Vec3>>>, SkyDesc) =
-            bincode::deserialize(bytes).expect("snapshot deserialize");
+        let (objects, kinds, rotations, base_verts, sky): (
+            Vec<ObjectDesc>,
+            Vec<ObjectKind>,
+            Vec<Vec3>,
+            Vec<Option<Vec<Vec3>>>,
+            SkyDesc,
+        ) = bincode::deserialize(bytes).expect("snapshot deserialize");
         self.objects = objects;
         self.kinds = kinds;
         self.rotations = rotations;

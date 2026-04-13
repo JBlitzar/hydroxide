@@ -144,7 +144,11 @@ impl Renderer {
             }
 
             let used = i + 1;
-            if self.adaptive && self.sample_chunk_size > 0 && used % self.sample_chunk_size == 0 && n_valid > 1 {
+            if self.adaptive
+                && self.sample_chunk_size > 0
+                && used % self.sample_chunk_size == 0
+                && n_valid > 1
+            {
                 let n = n_valid as f64;
                 let mu = s1 / n;
                 let sigma_squared = (s2 - (s1 * s1) / n) / (n - 1.0);
