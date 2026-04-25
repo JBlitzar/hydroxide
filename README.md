@@ -116,3 +116,7 @@ At this point, my code’s too fast for the testing harness. 2ms is too noisy, s
 In terms of optimization, the big one here is the illusion of speed. By that I mean progressive rendering. If it loads instantly for the user and it’s responsive, they’ll watch everything render in in real time and be entertained. If it’s 6000 ms to see anything respond to input, they’ll think it’s broken and click off.
 
 </details>
+
+## Rust Usage Declaration
+
+![Rust affirmation](/docs/rust_affirmation.png)
