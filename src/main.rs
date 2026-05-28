@@ -14,6 +14,7 @@ mod world;
 
 use crate::camera::Camera;
 use crate::geometry::mesh::MeshBVH;
+use crate::gpu::GpuRenderer;
 use crate::scene::{HdrSkyId, MaterialDesc, ObjectDesc, SceneDescription, SkyDesc};
 use crate::vec3::Vec3;
 use clap::Parser;
@@ -140,16 +141,34 @@ fn main() {
     scene.camera.half_tan_fov_y = scene.camera.half_tan_fov_x * (height as f64 / width as f64);
     scene.camera.width_px = width as usize;
     scene.camera.height_px = height as usize;
-    let (world, mut renderer) = scene.build();
+    let (world, _renderer) = scene.build();
     let start = std::time::Instant::now();
-    renderer.render(&world);
+    let mut gpu = pollster::block_on(GpuRenderer::new(width, height));
+    gpu.upload_scene(&world, world.camera(), samples, 100, roulette);
+    gpu.render(samples);
+    let pixels = pollster::block_on(gpu.read_pixels());
     println!("Render time: {:?}", start.elapsed());
-    renderer.save_image(&args.output);
-    println!("Image hash: {:x}", renderer.hash_buf());
+
+    let hash = hash_bytes(&pixels);
+    save_rgba_image(&args.output, width, height, pixels);
+
+    println!("Image hash: {:x}", hash);
     scene.save(&args.scene);
     println!("Scene saved to {}", args.scene);
     println!("Image saved to {}", args.output);
     open::that(&args.output).unwrap();
+}
+
+fn save_rgba_image(path: &str, width: u32, height: u32, pixels: Vec<u8>) {
+    let img = image::RgbaImage::from_raw(width, height, pixels).expect("invalid image buffer size");
+    img.save(path).expect("failed to save PNG image");
+}
+
+fn hash_bytes(bytes: &[u8]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[cfg(test)]

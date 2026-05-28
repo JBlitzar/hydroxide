@@ -1,12 +1,13 @@
 use crate::camera::Camera;
 use crate::geometry::Hittable;
 use crate::geometry::mesh::MeshBVH;
-use crate::renderer::Renderer;
+use crate::gpu::GpuRenderer;
 use crate::scene::{MaterialDesc, ObjectDesc, SceneDescription, SkyDesc};
 use crate::sky::{HDRSky, Sky};
 use crate::vec3::Vec3;
 use crate::world::World;
 use serde::{Deserialize, Serialize};
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
@@ -61,6 +62,10 @@ impl Sky for ArcSky {
     fn color(&self, ray: &crate::vec3::Ray) -> Vec3 {
         self.0.color(ray)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self.0.as_ref()
+    }
 }
 
 #[wasm_bindgen]
@@ -71,6 +76,9 @@ pub struct WasmRenderer {
     base_verts: Vec<Option<Vec<Vec3>>>,
     sky: SkyDesc,
     hdr_sky: Option<Arc<HDRSky>>,
+    gpu: RefCell<Option<GpuRenderer>>,
+    gpu_width: Cell<u32>,
+    gpu_height: Cell<u32>,
 }
 
 #[wasm_bindgen]
@@ -160,6 +168,9 @@ impl WasmRenderer {
             base_verts,
             sky: (SKY_TABLE[0].build)(),
             hdr_sky: None,
+            gpu: RefCell::new(None),
+            gpu_width: Cell::new(0),
+            gpu_height: Cell::new(0),
         }
     }
 
@@ -563,7 +574,7 @@ impl WasmRenderer {
         (self.objects.len() - 1) as u32
     }
 
-    pub fn render(
+    pub async fn render(
         &self,
         width: u32,
         height: u32,
@@ -589,14 +600,31 @@ impl WasmRenderer {
             aperture,
         );
         let world = self.build_world(camera);
-        let mut renderer = Renderer::new(
-            width as usize,
-            height as usize,
-            Some(samples as usize),
-            Some(termination_prob),
-        );
-        renderer.render(&world);
-        renderer.take_buffer_rgba()
+
+        let same_size = self.gpu_width.get() == width && self.gpu_height.get() == height;
+        let mut gpu = {
+            let mut slot = self.gpu.borrow_mut();
+            if same_size {
+                slot.take()
+            } else {
+                slot.take();
+                None
+            }
+        };
+
+        if gpu.is_none() {
+            gpu = Some(GpuRenderer::new(width, height).await);
+            self.gpu_width.set(width);
+            self.gpu_height.set(height);
+        }
+
+        let mut gpu = gpu.expect("gpu renderer missing");
+        gpu.upload_scene(&world, world.camera(), samples, 100, termination_prob);
+        gpu.render(samples);
+        let pixels = gpu.read_pixels().await;
+
+        *self.gpu.borrow_mut() = Some(gpu);
+        pixels
     }
 
     pub fn snapshot(&self) -> Vec<u8> {

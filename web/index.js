@@ -76,6 +76,9 @@ const PASSES = [
 let mainRenderer = null;
 let selectedIndex = -1;
 let cachedOutlineMask = null;
+let previewInFlight = false;
+let previewQueued = false;
+let previewToken = 0;
 let cachedOutlineW = 0;
 let cachedOutlineH = 0;
 
@@ -230,7 +233,16 @@ function drawOutlineOverlay() {
 
 function displayFrame(rgba, w, h, label) {
   if (renderPaused) return;
-  const imgData = new ImageData(new Uint8ClampedArray(rgba), w, h);
+  const byteLength = w * h * 4;
+  let view;
+  if (rgba instanceof ArrayBuffer) {
+    view = new Uint8ClampedArray(rgba, 0, byteLength);
+  } else if (ArrayBuffer.isView(rgba)) {
+    view = new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, byteLength);
+  } else {
+    view = new Uint8ClampedArray(rgba);
+  }
+  const imgData = new ImageData(view, w, h);
   if (w < canvas.width || h < canvas.height) {
     const offscreen = new OffscreenCanvas(w, h);
     const octx = offscreen.getContext("2d");
@@ -247,32 +259,52 @@ function displayFrame(rgba, w, h, label) {
   drawGizmos();
 }
 
-function renderPreview() {
+async function renderPreview() {
   if (!mainRenderer) return;
-  const base = renderBaseSize();
-  const w = Math.max(1, Math.floor(base.w * PREVIEW_SCALE));
-  const h = Math.max(1, Math.floor(base.h * PREVIEW_SCALE));
-  const cam = cameraFromOrbit();
-  updateAutofocus(w, h);
+  previewToken += 1;
+  const token = previewToken;
+  if (previewInFlight) {
+    previewQueued = true;
+    return;
+  }
+  previewInFlight = true;
 
-  const t0 = performance.now();
-  const rgba = mainRenderer.render(
-    w,
-    h,
-    FOV,
-    cam.x,
-    cam.y,
-    cam.z,
-    target.x,
-    target.y,
-    target.z,
-    1,
-    0.3,
-    focusDistance,
-    APERTURE,
-  );
-  const dt = performance.now() - t0;
-  displayFrame(rgba.buffer, w, h, `${w}x${h} | ${dt.toFixed(0)}ms | preview`);
+  try {
+    const base = renderBaseSize();
+    const w = Math.max(1, Math.floor(base.w * PREVIEW_SCALE));
+    const h = Math.max(1, Math.floor(base.h * PREVIEW_SCALE));
+    const cam = cameraFromOrbit();
+    updateAutofocus(w, h);
+
+    const t0 = performance.now();
+    const rgba = await mainRenderer.render(
+      w,
+      h,
+      FOV,
+      cam.x,
+      cam.y,
+      cam.z,
+      target.x,
+      target.y,
+      target.z,
+      1,
+      0.3,
+      focusDistance,
+      APERTURE,
+    );
+    const dt = performance.now() - t0;
+    if (token === previewToken && rgba && rgba.length) {
+      displayFrame(rgba, w, h, `${w}x${h} | ${dt.toFixed(0)}ms | preview`);
+    }
+  } catch (err) {
+    console.warn("Preview render failed", err);
+  } finally {
+    previewInFlight = false;
+    if (previewQueued) {
+      previewQueued = false;
+      renderPreview();
+    }
+  }
 }
 
 function sendRender() {
@@ -715,7 +747,8 @@ let gizmoDragStartY = 0;
 let gizmoDragStartNfo = null;
 const AXIS_COLORS = { x: "#e44", y: "#4e4", z: "#48f" };
 const AXIS_LABELS = { x: "X", y: "Y", z: "Z" };
-const PAD_W = 120, PAD_H = 120;
+const PAD_W = 120,
+  PAD_H = 120;
 
 gizmoTranslateBtn.addEventListener("click", () => {
   gizmoMode = "translate";
@@ -747,7 +780,8 @@ function hideGizmoWidget() {
 function drawGizmoPad() {
   gpc.clearRect(0, 0, PAD_W, PAD_H);
   const axes = ["x", "y", "z"];
-  const barW = 28, gap = 10;
+  const barW = 28,
+    gap = 10;
   const totalW = axes.length * barW + (axes.length - 1) * gap;
   const startX = (PAD_W - totalW) / 2;
 
@@ -782,7 +816,9 @@ function drawGizmoPad() {
       gpc.fill();
     } else {
       // arc for rotation
-      const cx = x + barW / 2, cy = PAD_H / 2, r = 30;
+      const cx = x + barW / 2,
+        cy = PAD_H / 2,
+        r = 30;
       gpc.beginPath();
       gpc.arc(cx, cy, r, -Math.PI * 0.8, Math.PI * 0.8);
       gpc.strokeStyle = AXIS_COLORS[a];
@@ -792,7 +828,7 @@ function drawGizmoPad() {
       const drawTip = (angle, dir) => {
         const tx = cx + r * Math.cos(angle);
         const ty = cy + r * Math.sin(angle);
-        const ta = angle + dir * Math.PI / 2;
+        const ta = angle + (dir * Math.PI) / 2;
         gpc.beginPath();
         gpc.moveTo(tx + 5 * Math.cos(ta - 0.5), ty + 5 * Math.sin(ta - 0.5));
         gpc.lineTo(tx, ty);
@@ -814,15 +850,16 @@ function drawGizmoPad() {
 
 function gizmoPadHitAxis(ex, ey) {
   const rect = gizmoPad.getBoundingClientRect();
-  const lx = ex - rect.left, ly = ey - rect.top;
+  const lx = ex - rect.left,
+    ly = ey - rect.top;
   const axes = ["x", "y", "z"];
-  const barW = 28, gap = 10;
+  const barW = 28,
+    gap = 10;
   const totalW = axes.length * barW + (axes.length - 1) * gap;
   const startX = (PAD_W - totalW) / 2;
   for (let i = 0; i < axes.length; i++) {
     const x = startX + i * (barW + gap);
-    if (lx >= x && lx <= x + barW && ly >= 8 && ly <= PAD_H - 8)
-      return axes[i];
+    if (lx >= x && lx <= x + barW && ly >= 8 && ly <= PAD_H - 8) return axes[i];
   }
   return null;
 }
@@ -839,11 +876,67 @@ function applyGizmoWidgetDrag(axis, dy) {
     const nz = axis === "z" ? nfo[3] + delta : nfo[3];
 
     if (selectedObjType === 0) {
-      mainRenderer.update_sphere(selectedIndex, nx, ny, nz, nfo[4], Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
-      sendWorkerMessage({ type: "update_sphere", index: selectedIndex, x: nx, y: ny, z: nz, radius: nfo[4], mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+      mainRenderer.update_sphere(
+        selectedIndex,
+        nx,
+        ny,
+        nz,
+        nfo[4],
+        Math.round(nfo[5]),
+        nfo[6],
+        nfo[7],
+        nfo[8],
+        nfo[9],
+        nfo[10],
+      );
+      sendWorkerMessage({
+        type: "update_sphere",
+        index: selectedIndex,
+        x: nx,
+        y: ny,
+        z: nz,
+        radius: nfo[4],
+        mat_type: Math.round(nfo[5]),
+        r: nfo[6],
+        g: nfo[7],
+        b: nfo[8],
+        fuzz: nfo[9],
+        ri: nfo[10],
+      });
     } else {
-      mainRenderer.update_mesh(selectedIndex, nx, ny, nz, nfo[4], nfo[11], nfo[12], nfo[13], Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
-      sendWorkerMessage({ type: "update_mesh", index: selectedIndex, x: nx, y: ny, z: nz, size: nfo[4], rx: nfo[11], ry: nfo[12], rz: nfo[13], mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+      mainRenderer.update_mesh(
+        selectedIndex,
+        nx,
+        ny,
+        nz,
+        nfo[4],
+        nfo[11],
+        nfo[12],
+        nfo[13],
+        Math.round(nfo[5]),
+        nfo[6],
+        nfo[7],
+        nfo[8],
+        nfo[9],
+        nfo[10],
+      );
+      sendWorkerMessage({
+        type: "update_mesh",
+        index: selectedIndex,
+        x: nx,
+        y: ny,
+        z: nz,
+        size: nfo[4],
+        rx: nfo[11],
+        ry: nfo[12],
+        rz: nfo[13],
+        mat_type: Math.round(nfo[5]),
+        r: nfo[6],
+        g: nfo[7],
+        b: nfo[8],
+        fuzz: nfo[9],
+        ri: nfo[10],
+      });
     }
   } else {
     if (selectedObjType === 0) return;
@@ -851,8 +944,39 @@ function applyGizmoWidgetDrag(axis, dy) {
     const rx = axis === "x" ? nfo[11] + rotDelta : nfo[11];
     const ry = axis === "y" ? nfo[12] + rotDelta : nfo[12];
     const rz = axis === "z" ? nfo[13] + rotDelta : nfo[13];
-    mainRenderer.update_mesh(selectedIndex, nfo[1], nfo[2], nfo[3], nfo[4], rx, ry, rz, Math.round(nfo[5]), nfo[6], nfo[7], nfo[8], nfo[9], nfo[10]);
-    sendWorkerMessage({ type: "update_mesh", index: selectedIndex, x: nfo[1], y: nfo[2], z: nfo[3], size: nfo[4], rx, ry, rz, mat_type: Math.round(nfo[5]), r: nfo[6], g: nfo[7], b: nfo[8], fuzz: nfo[9], ri: nfo[10] });
+    mainRenderer.update_mesh(
+      selectedIndex,
+      nfo[1],
+      nfo[2],
+      nfo[3],
+      nfo[4],
+      rx,
+      ry,
+      rz,
+      Math.round(nfo[5]),
+      nfo[6],
+      nfo[7],
+      nfo[8],
+      nfo[9],
+      nfo[10],
+    );
+    sendWorkerMessage({
+      type: "update_mesh",
+      index: selectedIndex,
+      x: nfo[1],
+      y: nfo[2],
+      z: nfo[3],
+      size: nfo[4],
+      rx,
+      ry,
+      rz,
+      mat_type: Math.round(nfo[5]),
+      r: nfo[6],
+      g: nfo[7],
+      b: nfo[8],
+      fuzz: nfo[9],
+      ri: nfo[10],
+    });
   }
   renderPreview();
   loadObjectToPanel(selectedIndex);

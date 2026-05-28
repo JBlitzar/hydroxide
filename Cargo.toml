@@ -39,13 +39,15 @@ clap = { version = "4.6.0", features = ["derive"], optional = true }
 open = { version = "5.3.3", optional = true }
 ureq = { version = "2", optional = true }
 wgpu = "29.0.1"
-bytemuck = "1.25.0"
+bytemuck = { version = "1.25.0", features = ["derive"] }
 pollster = "0.4.0"
+futures-channel = "0.3"
+wasm-bindgen-futures = { version = "0.4", optional = true }
 
 [features]
 default = ["native"]
 native = ["indicatif", "clap", "open", "ureq"]
-wasm = ["wasm-bindgen", "wasm-bindgen-rayon", "js-sys", "web-sys"]
+wasm = ["wasm-bindgen", "wasm-bindgen-rayon", "wasm-bindgen-futures", "js-sys", "web-sys"]
 
 [dev-dependencies]
 criterion = "0.8.2"
